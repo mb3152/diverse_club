@@ -52,9 +52,9 @@ global costs #for functional connectivity matrices
 costs = np.arange(5,21) *0.01
 global algorithms
 global cores
-cores = 5
+cores = 20
 algorithms = np.array(['infomap','walktrap','spectral','edge_betweenness','label_propogation','louvain','spin_glass','walktrap_n','louvain_res'])
-algorithms = np.array(['infomap','walktrap','edge_betweenness','label_propogation','louvain','spin_glass','walktrap_n','louvain_res'])
+
 def corrfunc(x, y, **kws):
 	r, _ = pearsonr(x, y)
 	ax = plt.gca()
@@ -407,7 +407,6 @@ def plot_pc_distribution(network,community_alg,savestrs,bins=10,filter_name=None
 	# # sns.plt.savefig(savestr[1])
 	# sns.plt.show()
 
-
 def test_threshold(matrix,savestr):
 	rs = np.arange(5,21)*.001
 	pcs = np.zeros((len(rs),matrix.shape[0]))
@@ -595,17 +594,18 @@ class Network:
 			df = df.append(temp_df)
 		df.edge_betweenness = df.edge_betweenness.astype(float)
 		self.edge_betweenness = df.copy()
-	def attack(self,attack_name,n_attacks):
+	def attack(self,attack_name,n_attacks,n_iters):
 		variables = []
 		attack_conditions = []
-		for i,network,name in zip(range(len(self.networks)),self.networks,self.names):
-			if attack_name == None:
-				variables.append([i,network,n_attacks,self.ranks[i]])
-				attack_conditions.append(self.names[i].split("_")[0])
-				continue
-			elif name.split('_')[1] == attack_name:
-				variables.append([i,network,n_attacks,self.ranks[i]])
-				attack_conditions.append(self.names[i].split("_")[0])
+		for n_iter in range(n_iters):
+			for i,network,name in zip(range(len(self.networks)),self.networks,self.names):
+				if attack_name == None:
+					variables.append([i,network,n_attacks,self.ranks[i]])
+					attack_conditions.append(self.names[i].split("_")[0])
+					continue
+				elif name.split('_')[1] == attack_name:
+					variables.append([i,network,n_attacks,self.ranks[i]])
+					attack_conditions.append(self.names[i].split("_")[0])
 		pool = Pool(cores)
 		results = pool.map(attack,variables)
 		for i,r in enumerate(results):
@@ -638,6 +638,78 @@ def swap(matrix,membership):
 		for j in np.where(membership == i)[0]:
 			swap_indices.append(j)
 	return swap_indices
+
+def plot_all_clubness(network,randomize_topology,permute_strength):
+	if network == 'human':
+		condition_name = 'task'
+		diverse_colors = np.array(sns.color_palette("cubehelix", 12))[np.array([True,True,False,False,False,True,True,True,True,True,True,True])]
+	df = pd.DataFrame()
+	for community_alg in  algorithms:
+		if community_alg == 'spectral': continue
+		temp_df = load_object('/%s/diverse_club/results/%s_0.8_%s_%s_%s.obj'%(homedir,network,community_alg,randomize_topology,permute_strength))
+		temp_df = temp_df.clubness
+		temp_df['community algorithm'] = community_alg
+		if community_alg == 'walktrap_n':
+			temp_df.rename(columns={'n_clusters':'cost'}, inplace=True)
+		if community_alg == 'louvain_res':
+			temp_df.rename(columns={'resolution':'cost'}, inplace=True)
+		df = df.append(temp_df)
+	df['percentile'] = df['rank'].rank(pct=True)
+	sns.set(context="paper",font='Helvetica',style='white')
+	nconditions = len(np.unique(df[condition_name]))
+	fig,subplots = sns.plt.subplots(int(np.ceil(nconditions/2.)),2,figsize=(mm_2_inches(183),mm_2_inches(61.75*np.ceil(nconditions/2.))))
+	subplots = subplots.reshape(-1)
+
+	for sidx,diffnetwork in enumerate(np.unique(df[condition_name])):
+		temp_df = df[df.task==diffnetwork]
+		temp_df = temp_df[temp_df.percentile<.95]
+
+		ymax = np.nanmax(temp_df.clubness.values)
+		ymin = np.nanmin(temp_df.clubness.values)
+		np.array(sns.color_palette("cubehelix", 3))[np.array([True,True,True])]
+		
+		rich_df = df[(df[condition_name]==diffnetwork)&(df.club=='rich')].copy()
+		rich_df = rich_df[(rich_df['community algorithm']=='walktrap_n')]
+		rich_df['community algorithm'] = 'degree, full matrix'
+		ax = sns.tsplot(data=rich_df,condition='community algorithm',unit='cost',time='percentile',value='clubness',color=sns.color_palette()[1],ax=subplots[sidx])
+
+		rich_df = df[(df[condition_name]==diffnetwork)&(df.club=='rich')&(df['community algorithm']=='infomap')].copy()
+		rich_df['percentile'] = rich_df['rank'].rank(pct=True)
+		rich_df['community algorithm'] = 'degree, thresholded'
+		ax1 = sns.tsplot(data=rich_df,condition='community algorithm',unit='cost',time='percentile',value='clubness',color=sns.color_palette()[1],ax=subplots[sidx])
+		ax2.xaxis.set_major_locator(mpl.ticker.MultipleLocator(.15))
+
+		temp_df = df[(df[condition_name]==diffnetwork)&(df.club=='diverse')].copy()
+		temp_df[(temp_df['community algorithm']!='walktrap_n')&(temp_df['community algorithm']!='louvain_res')]
+		ax2 = sns.tsplot(data=temp_df,condition='community algorithm',unit='cost',time='percentile',value='clubness',color=diverse_colors,ax=subplots[sidx])
+		
+		ax2.set_xlabel('percentile cut off for the club')
+		ax2.set_title(diffnetwork.lower(),fontdict={'fontsize':'large'})	
+		ax2.set_xlim(0,.95)
+		final_max = 0
+		final_min = 0
+		for i in range(len(ax.lines)):
+			temp_max = np.nanmax(ax2.lines[i].get_data()[1][ax2.lines[i].get_data()[0]<.95])
+			if temp_max > final_max:
+				final_max = temp_max
+		for i in range(len(ax2.lines)):
+			temp_min = np.nanmin(ax2.lines[i].get_data()[1][ax2.lines[i].get_data()[0]<.95])
+			if temp_min < final_min:
+				final_min = temp_min
+		ax2.set_ylim(final_min,final_max)
+		ax2.xaxis.set_major_locator(mpl.ticker.MultipleLocator(.15))
+		if sidx + 1 == len(np.unique(df[condition_name])):
+			ax2.legend()
+		else:
+			ax2.legend_.remove()
+
+	if len(subplots) != nconditions:
+		fig.delaxes(subplots[-1])
+	sns.despine()
+	sns.plt.tight_layout()
+	sns.plt.savefig('%s/diverse_club/figures/%s_all_clubness.pdf'%(homedir,network))
+	sns.plt.show()
+	sns.plt.close()
 
 def plot_matrices(n,filter_name,savestr):
 	to_plot = []
@@ -734,17 +806,21 @@ def plot_clubness(n,savestr):
 	fig,subplots = sns.plt.subplots(int(np.ceil(nconditions/2.)),2,figsize=(mm_2_inches(183),mm_2_inches(61.75*np.ceil(nconditions/2.))))
 	subplots = subplots.reshape(-1)
 	for idx,diffnetwork in enumerate(np.unique(n.clubness[n.subsets[0]])):
-		ax = sns.tsplot(data=n.clubness[(n.clubness[n.subsets[0]]==diffnetwork)],condition='club',color={'diverse':sns.color_palette()[0],'rich':sns.color_palette()[1]},unit=n.subsets[1],time='rank',value='clubness',ax=subplots[idx])
+		df = n.clubness[(n.clubness[n.subsets[0]]==diffnetwork)].copy()
+		df['percentile'] = df['rank'].rank(pct=True)
+		ax = sns.tsplot(data=df,condition='club',color={'diverse':sns.color_palette()[0],'rich':sns.color_palette()[1]},unit=n.subsets[1],time='percentile',value='clubness',ax=subplots[idx])
 		ax.set_title(diffnetwork.lower(),fontdict={'fontsize':'large'})
-		ax.set_xticklabels(np.around(np.linspace(0,95,len(ax.get_xticklabels()))))
-		n_nodes = int(ax.lines[0].get_data()[0][-1] + 1)
-		xcutoff = int(n_nodes*1)
+		len(ax.lines[1].get_data()[1])
+		xcutoff = int(len(ax.lines[1].get_data()[1])*.95)
+
 		ax.set_xlim(0,xcutoff)
-		ylims_array = np.array([ax.lines[1].get_data()[1][:xcutoff],ax.lines[0].get_data()[1][:xcutoff]])
-		ymax = np.nanmax(ylims_array)
-		ymin = np.nanmin(ylims_array)
-		ax.set_ylim(ymin,ymax)
-		ax.set_xlabel('percentile cut off for club')
+		# labels = [item.get_text() for item in ax.get_xticklabels()]
+		# 1/0
+		# ax.set_xticklabels(np.around(np.linspace(0,100,len(ax.get_xticklabels()))))
+		# ax.get_xaxis().get_major_formatter().set_useOffset(False)
+		ax.autoscale(True,'both',True)
+		ax.xaxis.set_major_locator(mpl.ticker.MultipleLocator(.15))
+		ax.set_xlabel('percentile cut off for the club')
 	if len(subplots) != nconditions:
 		fig.delaxes(subplots[-1])
 	sns.despine()
@@ -906,7 +982,7 @@ def make_networks(network,rankcut,community_alg):
 			for nameidx,n in enumerate(raw_networks):
 				for cost in subsetiters:
 					variables.append([n,community_alg,cost,False])
-					names.append(raw_names[nameidx] + str(cost))
+					names.append(raw_names[nameidx] + '_' + str(cost))
 			networks = pool.map(partition_network,variables)
 			n = Network(networks,rankcut,names,subsets,community_alg)
 			save_object(n,'/%s/diverse_club/graphs/graph_objects/%s_%s_%s.obj'%(homedir,network,rankcut,community_alg))		
@@ -923,7 +999,7 @@ def rename():
 		os.system ('mv %s %s' %(f,new))
 
 def run_networks(network,run=False,nrandomiters=1000,rankcut=.8,community_alg='infomap',randomize_topology=True,permute_strength=False,plot_it=False):
-	# network = 'human'
+	# network='f_c_elegans'
 	# run=False
 	# nrandomiters=1000
 	# rankcut=.8
@@ -931,6 +1007,7 @@ def run_networks(network,run=False,nrandomiters=1000,rankcut=.8,community_alg='i
 	# randomize_topology=True
 	# permute_strength=False
 	# plot_it=True
+
 	if community_alg == 'louvain_res':
 		filter_name = '0.5'
 	elif community_alg == 'walktrap_n':
@@ -946,18 +1023,20 @@ def run_networks(network,run=False,nrandomiters=1000,rankcut=.8,community_alg='i
 			n = make_networks(network,rankcut,community_alg)
 		if network == 'human' or network == 'f_c_elegans':
 			if community_alg == 'louvain_res' or community_alg == 'walktrap_n':
-				n.attack(None,1000)
+				n.attack(None,100,10)
 			else:
-				n.attack('0.2',10000)
+				n.attack('0.2',1000,10)
 		if network == 'structural_networks':
 			n = make_networks(network,rankcut,community_alg)
 			if community_alg == 'louvain_res' or community_alg == 'walktrap_n':
-				n.attack(None,1000)
+				n.attack(None,5,10)
 			else:
-				n.attack(None,10000)
+				n.attack(None,100,10)
 		# save_object(n,'/%s/diverse_club/results/%s_%s_%s_%s_%s.obj'%(homedir,network,rankcut,community_alg,randomize_topology,permute_strength))
 		# 1/0
+		save_object(n,'/%s/diverse_club/results/%s_%s_%s_%s_%s.obj'%(homedir,network,rankcut,community_alg,randomize_topology,permute_strength))
 		n.calculate_clubness(niters=nrandomiters,randomize_topology=randomize_topology,permute_strength=permute_strength)
+		save_object(n,'/%s/diverse_club/results/%s_%s_%s_%s_%s.obj'%(homedir,network,rankcut,community_alg,randomize_topology,permute_strength))
 		n.calculate_intersect()
 		n.calculate_betweenness()
 		n.calculate_edge_betweenness()
@@ -1020,21 +1099,18 @@ def airport_analyses():
 
 def submit_2_sge(network='human',cores=cores):
 	for algorithm in algorithms:
-		if algorithm != 'spectral': continue
 		command = 'qsub -pe threaded %s -V -l mem_free=1G -j y -o /%s/diverse_club/sge/ -e /%s/diverse_club/sge/ -N %s diverse_club.py run %s %s ' \
 		%(cores,homedir,homedir,algorithm,network,algorithm)
 		os.system(command)
 
-# run_networks('f_c_elegans',run=True,nrandomiters=1000,rankcut=.8,community_alg='spectral',randomize_topology=True,permute_strength=False,plot_it=False)
-
 # for community_alg in algorithms:
-	# if community_alg != 'louvain_res': continue
-	# run_networks('human',run=False,nrandomiters=1000,rankcut=.8,community_alg=community_alg,randomize_topology=True,permute_strength=False,plot_it=True)
-	# run_networks('f_c_elegans',run=False,nrandomiters=1000,rankcut=.8,community_alg=community_alg,randomize_topology=True,permute_strength=False,plot_it=True)
+# 	if community_alg != 'spectral': continue
+# 	# run_networks('human',run=False,nrandomiters=1000,rankcut=.8,community_alg=community_alg,randomize_topology=True,permute_strength=False,plot_it=True)
+# 	run_networks('f_c_elegans',run=False,nrandomiters=1000,rankcut=.8,community_alg=community_alg,randomize_topology=True,permute_strength=False,plot_it=True)
 
 if len(sys.argv) > 1:
 	if sys.argv[1] == 'run':
-		run_networks(sys.argv[2],run=True,nrandomiters=1000,rankcut=.8,community_alg=sys.argv[3],randomize_topology=True,permute_strength=False)
+		run_networks(sys.argv[2],run=True,nrandomiters=100,rankcut=.8,community_alg=sys.argv[3],randomize_topology=True,permute_strength=False)
 
 
 
