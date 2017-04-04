@@ -52,7 +52,7 @@ global costs #for functional connectivity matrices
 costs = np.arange(5,21) *0.01
 global algorithms
 global cores
-cores = 20
+cores = 2
 algorithms = np.array(['infomap','walktrap','spectral','edge_betweenness','label_propogation','louvain','spin_glass','walktrap_n','louvain_res'])
 order = np.array(['infomap','walktrap','spectral','edge_betweenness','label_propogation','louvain','spin_glass','rich club, thresholded','rich club, dense','walktrap_n','louvain_res'])
 
@@ -379,62 +379,70 @@ def plot_pc_similarity(network):
 			sns.plt.savefig(savestr,dpi=600)
 			sns.plt.close()
 
-def plot_pc_distribution(network,community_alg,savestrs,bins=10):
-	
+def plot_pc_distribution(network):
+	network_objects = []
+	for community_alg in algorithms:
+		network_objects.append(load_object('/%s/diverse_club/results/%s_0.8_%s_True_False.obj'%(homedir,network,community_alg)))
 	if network == 'f_c_elegans':
-		network_objects = []
-		for community_alg in algorithms:
-			network_objects.append(load_object('/%s/diverse_club/results/%s_0.8_%s_True_False.obj'%(homedir,network,community_alg)))
-		for worm in range(1,5):
-			nconditions = len(network_objects)
-			fig,subplots = sns.plt.subplots(int(np.ceil(nconditions/2.)),2,figsize=(mm_2_inches(183),mm_2_inches(61.75*np.ceil(nconditions/2.))))
-			subplots = subplots.reshape(-1)
-			sns.set_style('dark')
-			sns.set(rc={'axes.facecolor':'.5','axes.grid': False})
-
-			for idx,n in enumerate(network_objects):
-				pcs = []
-				for nidx,network in enumerate(n.networks):
-					if n.names[nidx].split('_')[0] != 'Worm%s'%(worm):
-						continue
-					pcs.append(network.pc)
-				
-				pcs = np.array(pcs)
-				densities = np.array(densities)
-
-				# pcs = pcs[np.argsort(community_sizes)]
-
-				colors = sns.light_palette("red",pcs.shape[0],reverse=True)
-				# n = len(colors)
-				sns.plt.sca(subplots[idx])
-				mean = []
-				for i in range(pcs.shape[0]):
-					# f = sns.kdeplot(pcs[i],color=colors[i],ax=subplots[idx],**{'alpha':.5})
-					f = sns.kdeplot(pcs[i],color=colors[i],bw=.05,**{'alpha':.5})
-					mean.append(f.lines[0].get_data()[1])
-					f.set_yticklabels('')
+		iters = ['Worm1','Worm2','Worm3','Worm4']
+	if network == 'human':
+		iters = tasks
+	if network == 'structural_networks':
+		iters = ['c elegans','macaque','flight traffic','US power grid']
+	for name_idx in iters:
+		nconditions = len(network_objects)
+		fig,subplots = sns.plt.subplots(int(np.ceil(nconditions/2.)),2,figsize=(mm_2_inches(183),mm_2_inches(61.75*np.ceil(nconditions/2.))))
+		subplots = subplots.reshape(-1)
+		sns.set_style('dark')
+		sns.set(rc={'axes.facecolor':'.5','axes.grid': False})
+		for idx,n in enumerate(network_objects):
+			pcs = []
+			for nidx,nn in enumerate(n.networks):
+				if n.names[nidx].split('_')[0] != '%s'%(name_idx) and  n.names[nidx].split('_')[0] != '%s'%(name_idx.lower()):
+					continue
+				pcs.append(nn.pc)
+			if community_alg == 'walktrap_n':
+				pcs = np.flip(pcs,axis=0)
+			pcs = np.array(pcs)
+			colors = sns.light_palette("red",pcs.shape[0],reverse=True)
+			sns.plt.sca(subplots[idx])
+			mean = []
+			for i in range(pcs.shape[0]):
+				f = sns.kdeplot(pcs[i],color=colors[i],bw=.05,**{'alpha':.5})
+				mean.append(f.lines[0].get_data()[1])
+				f.set_yticklabels('')
+			if network != 'structural_networks':
 				m = sns.tsplot(np.nanmean(mean,axis=0),color='black',ax=subplots[idx].twiny(),**{'alpha':.5})
 				m.set_yticklabels('')
 				m.set_xticklabels('')
-				m.set_title(algorithms[idx])
-				if idx == 0:
-					patches = []
-					for color,name in zip(colors,np.arange(5,16)*0.01):
-						patches.append(mpl.patches.Patch(color=color,label=name,alpha=.75))
-					patches.append(mpl.patches.Patch(color='black',label='mean'))
-			savestr = '/%s/diverse_club/figures/individual/pc_dist_%s.pdf'%(homedir,'Worm%s'%(worm))
-			ax = subplots[-1]
+			f.set_title(algorithms[idx])
+			if idx == 0:
+				patches = []
+				for color,name in zip(colors,np.arange(5,16)*0.01):
+					patches.append(mpl.patches.Patch(color=color,label=name,alpha=.75))
+				patches.append(mpl.patches.Patch(color='black',label='mean'))
+		ax = subplots[-1]
+		savestr = '/%s/diverse_club/figures/individual/pc_dist_%s.pdf'%(homedir,'%s_%s'%(network,name_idx))
+		if network != 'structural_networks':
 			ax.legend(handles=patches,loc=10)
-			sns.despine()
 			ax.get_xaxis().set_visible(False)
 			ax.get_yaxis().set_visible(False)
 			ax.spines['left'].set_color('white')
 			ax.spines['bottom'].set_color('white')
-			ax.set_axis_bgcolor('white')
-			sns.plt.tight_layout()
-			sns.plt.savefig(savestr)
-			# sns.plt.show()
-			sns.plt.close()
+			sns.despine()
+		else:
+			ax = subplots[-1]
+			ax.imshow(np.arange(16).reshape(1, 16),cmap=mpl.colors.ListedColormap(list(colors)),interpolation="nearest", aspect="auto")
+			ax.set_ylim(0,1)
+			ax.set_xticklabels('')
+			ax.set_yticklabels('')
+			ax.set_xlabel('More Communities              Fewer Communities')
+
+		ax.set_axis_bgcolor('white')
+		sns.plt.tight_layout()
+		sns.plt.savefig(savestr)
+		# sns.plt.show()
+		sns.plt.close()
 
 	
 
@@ -1014,6 +1022,40 @@ def plot_all_attacks(network):
 	# sns.plt.show()
 	sns.plt.close()	
 
+def plot_all_intersect(network):
+	colors = np.zeros((9,3))
+	colors[np.ix_([0,1])] = sns.cubehelix_palette(8)[-3],sns.cubehelix_palette(8)[3]
+	colors[np.ix_([2,3,4,5,6,7,8])] = np.array(sns.color_palette("cubehelix", 18))[-7:]
+	df = pd.DataFrame()
+	for community_alg in algorithms:
+		temp_df = load_object('/%s/diverse_club/results/%s_0.8_%s_True_False.obj'%(homedir,network,community_alg))
+		temp_df = temp_df.intersect
+		if community_alg == 'walktrap_n': community_alg = 'walktrap (n)'
+		if community_alg == 'louvain_res': community_alg = 'louvain (resolution)'
+		if community_alg == 'spin_glass': community_alg = 'spin glass'
+		if community_alg == 'edge_betweenness': community_alg = 'edge betweenness'
+		if community_alg == 'label_propogation': community_alg = 'label propogation'
+		temp_df['community algorithm'] = community_alg
+		df = df.append(temp_df)
+	df.condition = df.condition.str.lower()
+	newintdf = pd.DataFrame()
+	for t in df.condition.values:
+		newintdf = newintdf.append(pd.DataFrame({'condition':t,'percent community':df['percent community, diverse club'][df.condition==t],'club':'diverse','community algorithm':df['community algorithm'][df.condition==t]}),ignore_index=True)
+		newintdf = newintdf.append(pd.DataFrame({'condition':t,'percent community':df['percent community, rich club'][df.condition==t],'club':'rich','community algorithm':df['community algorithm'][df.condition==t]}),ignore_index=True)
+	final_df = pd.DataFrame()
+	final_df['difference, percentage of communities with a diverse club node minus percentage of communities with a rich club node'] = newintdf['percent community'][newintdf.club == 'diverse'].values - newintdf['percent community'][newintdf.club == 'rich'].values
+	final_df['community algorithm'] = newintdf['community algorithm'][newintdf.club == 'diverse']
+	final_df['condition'] = newintdf['condition'][newintdf.club == 'diverse']
+
+	fig,subplots = sns.plt.subplots(2,1,figsize=(mm_2_inches(183),mm_2_inches(61.75*np.ceil((nconditions+1)/2.))))
+	sns.set(context="paper",font='Helvetica',style='white')
+	ax = sns.barplot(y='condition', x="percent overlap", hue='community algorithm', palette=colors,data=df,orient="h",ax=subplots[0])
+	ax.set_xlim((0,1))
+	ax1 = sns.barplot(y='condition', x='difference, percentage of communities with a diverse club node minus percentage of communities with a rich club node', hue='community algorithm', palette=colors,data=final_df,orient="h",ax=subplots[1])
+	ax1.legend_.remove()
+	sns.plt.savefig('/%s/diverse_club/figures/%s_all_intersect.pdf'%(homedir,network))
+	sns.plt.show()
+
 def plot_matrices(n,filter_name,savestr):
 	to_plot = []
 	plot_names = []
@@ -1150,7 +1192,7 @@ def plot_intersect(n,savestr):
 	sns.plt.savefig(savestr.replace('REPLACE','percent_community_rich'))
 	sns.plt.close()
 	newintdf = pd.DataFrame()
-	for t in n.intersect.condition.values:
+	for t in df.condition.values:
 		newintdf = newintdf.append(pd.DataFrame({'condition':t,'percent community':n.intersect['percent community, diverse club'][n.intersect.condition==t],'club':'diverse'}),ignore_index=True)
 		newintdf = newintdf.append(pd.DataFrame({'condition':t,'percent community':n.intersect['percent community, rich club'][n.intersect.condition==t],'club':'rich'}),ignore_index=True)
 	sns.barplot(data=newintdf,x='percent community',y='condition',hue='club',palette={'diverse':sns.color_palette()[0],'rich':sns.color_palette()[1]})
@@ -1224,7 +1266,8 @@ def partition_network(variables):
 
 def make_networks(network,rankcut,community_alg):
 	if network == 'human':
-		try: n = load_object('/%s/diverse_club/graphs/graph_objects/%s_%s_%s.obj'%(homedir,network,rankcut,community_alg))
+		try: 
+			n = load_object('/%s/diverse_club/graphs/graph_objects/%s_%s_%s.obj'%(homedir,network,rankcut,community_alg))
 		except:
 			if community_alg == 'louvain_res':
 				subsets = ['task','resolution']
@@ -1247,7 +1290,8 @@ def make_networks(network,rankcut,community_alg):
 			n = Network(networks,rankcut,names,subsets,community_alg)
 			save_object(n,'/%s/diverse_club/graphs/graph_objects/%s_%s_%s.obj'%(homedir,network,rankcut,community_alg))
 	if network == 'f_c_elegans':
-		try: n = load_object('/%s/diverse_club/graphs/graph_objects/%s_%s_%s.obj'%(homedir,network,rankcut,community_alg))
+		try:
+			n = load_object('/%s/diverse_club/graphs/graph_objects/%s_%s_%s.obj'%(homedir,network,rankcut,community_alg))
 		except:	
 			if community_alg == 'louvain_res':
 				subsets = ['worm','resolution']
