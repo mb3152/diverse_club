@@ -267,7 +267,7 @@ def check_network(network):
 
 def plot_pc_similarity(network):
 	def plot_pc_correlations(matrix,labels,nlabels,title,savestr):
-		heatmap = sns.heatmap(pd.DataFrame(matrix,columns=labels),square=True,yticklabels=nlabels,xticklabels=nlabels)
+		heatmap = sns.heatmap(pd.DataFrame(matrix,columns=labels),square=True,yticklabels=nlabels,xticklabels=nlabels,cmap = "RdBu_r",**{'vmin':-1,'vmax':1.0})
 		heatmap.set_xticklabels(heatmap.axes.get_xticklabels(),rotation=90,fontsize=6)
 		heatmap.set_yticklabels(np.flip(heatmap.axes.get_xticklabels(),0),rotation=360,fontsize=6)
 		mean=np.nanmean(matrix[matrix!=1])
@@ -336,7 +336,7 @@ def plot_pc_similarity(network):
 				for j in range(len(plot_network_objects)):
 					task_pc_matrix[i,j] = scipy.stats.spearmanr(plot_network_objects[i].pc,plot_network_objects[j].pc)[0]
 			matrices.append(task_pc_matrix)
-			savestr = '/%s/diverse_club/figures/pc_similarity_algorithms_f_c_elegans_%s.pdf'%(homedir,worm)
+			savestr = '/%s/diverse_club/figures/individual/pc_similarity_algorithms_f_c_elegans_%s.pdf'%(homedir,worm)
 			plot_pc_correlations(task_pc_matrix,labels,4,'functional c elegans, %s'%(worm.lower()),savestr)
 		savestr = '/%s/diverse_club/figures/pc_similarity_algorithms_f_c_elegans_mean.pdf'%(homedir)
 		plot_pc_correlations(np.nanmean(matrices,axis=0),labels,4,'functional c elegans, mean across worms',savestr)
@@ -346,6 +346,8 @@ def plot_pc_similarity(network):
 		for community_alg in algorithms:
 			network_objects.append(load_object('/%s/diverse_club/graphs/graph_objects/structural_networks_0.8_%s.obj'%(homedir,community_alg)))
 		for structural_network in ['macaque','c_elegans','US power grid','flight traffic']:
+			if structural_network == 'c_elegans':
+				structural_network = 'c elegans'
 			labels = []
 			alglabels = []
 			plot_network_objects = []
@@ -367,47 +369,77 @@ def plot_pc_similarity(network):
 					pc_matrix[i,j] = scipy.stats.spearmanr(plot_network_objects[i],plot_network_objects[j])[0]
 			savestr = '/%s/diverse_club/figures/pc_similarity_algorithms_sturctural_%s.pdf'%(homedir,structural_network)
 			title = structural_network
-			heatmap = sns.heatmap(pc_matrix,square=True,**{'vmin':0})
+			# np.fill_diagonal(pc_matrix,0.0)
+			heatmap = sns.heatmap(pc_matrix,square=True,cmap = "RdBu_r",**{'vmin':-1,'vmax':1.0})
 			heatmap.set_xticklabels(algorithms,rotation=90,fontsize=6)
 			heatmap.set_yticklabels(np.flip(algorithms,0),rotation=360,fontsize=6)
 			mean=np.nanmean(pc_matrix[pc_matrix!=1])
 			heatmap.set_title(title + ', mean=%s'%(np.around(mean,3)))
 			sns.plt.tight_layout()
 			sns.plt.savefig(savestr,dpi=600)
-			sns.plt.show()
 			sns.plt.close()
 
-def plot_pc_distribution(network,community_alg,savestrs,bins=10,filter_name=None):
-	n_object = load_object('/%s/diverse_club/results/%s_%s_%s_%s_%s.obj'%(homedir,network,0.8,community_alg,True,False))
+def plot_pc_distribution(network,community_alg,savestrs,bins=10):
 	
-	nconditions = len(filter_names)
-	fig,subplots = sns.plt.subplots(int(np.ceil(nconditions/2.)),2,figsize=(mm_2_inches(183),mm_2_inches(61.75*np.ceil(nconditions/2.))))
-	subplots = subplots.reshape(-1)
-	sns.set_style('dark')
-	sns.set(rc={'axes.facecolor':'.5','axes.grid': False})
+	if network == 'f_c_elegans':
+		network_objects = []
+		for community_alg in algorithms:
+			network_objects.append(load_object('/%s/diverse_club/results/%s_0.8_%s_True_False.obj'%(homedir,network,community_alg)))
+		for worm in range(1,5):
+			nconditions = len(network_objects)
+			fig,subplots = sns.plt.subplots(int(np.ceil(nconditions/2.)),2,figsize=(mm_2_inches(183),mm_2_inches(61.75*np.ceil(nconditions/2.))))
+			subplots = subplots.reshape(-1)
+			sns.set_style('dark')
+			sns.set(rc={'axes.facecolor':'.5','axes.grid': False})
+
+			for idx,n in enumerate(network_objects):
+				pcs = []
+				for nidx,network in enumerate(n.networks):
+					if n.names[nidx].split('_')[0] != 'Worm%s'%(worm):
+						continue
+					pcs.append(network.pc)
+				
+				pcs = np.array(pcs)
+				densities = np.array(densities)
+
+				# pcs = pcs[np.argsort(community_sizes)]
+
+				colors = sns.light_palette("red",pcs.shape[0],reverse=True)
+				# n = len(colors)
+				sns.plt.sca(subplots[idx])
+				mean = []
+				for i in range(pcs.shape[0]):
+					# f = sns.kdeplot(pcs[i],color=colors[i],ax=subplots[idx],**{'alpha':.5})
+					f = sns.kdeplot(pcs[i],color=colors[i],bw=.05,**{'alpha':.5})
+					mean.append(f.lines[0].get_data()[1])
+					f.set_yticklabels('')
+				m = sns.tsplot(np.nanmean(mean,axis=0),color='black',ax=subplots[idx].twiny(),**{'alpha':.5})
+				m.set_yticklabels('')
+				m.set_xticklabels('')
+				m.set_title(algorithms[idx])
+				if idx == 0:
+					patches = []
+					for color,name in zip(colors,np.arange(5,16)*0.01):
+						patches.append(mpl.patches.Patch(color=color,label=name,alpha=.75))
+					patches.append(mpl.patches.Patch(color='black',label='mean'))
+			savestr = '/%s/diverse_club/figures/individual/pc_dist_%s.pdf'%(homedir,'Worm%s'%(worm))
+			ax = subplots[-1]
+			ax.legend(handles=patches,loc=10)
+			sns.despine()
+			ax.get_xaxis().set_visible(False)
+			ax.get_yaxis().set_visible(False)
+			ax.spines['left'].set_color('white')
+			ax.spines['bottom'].set_color('white')
+			ax.set_axis_bgcolor('white')
+			sns.plt.tight_layout()
+			sns.plt.savefig(savestr)
+			# sns.plt.show()
+			sns.plt.close()
+
+	
+
 	for sidx,filter_name in enumerate(filter_names):
-		pcs = []
-		community_sizes = []
-		densities = []
-		for idx,network in enumerate(n_object.networks):
 
-			if filter_name not in n_object.names[idx]: continue
-			pcs.append(network.pc)
-			community_sizes.append(len(network.community.sizes()))
-			densities.append(np.around(network.community.graph.density(),2))
-		
-		pcs = np.array(pcs)
-		community_sizes = np.array(community_sizes)
-		densities = np.array(densities)
-
-		pcs = pcs[np.argsort(community_sizes)]
-
-		colors = sns.light_palette("red",pcs.shape[0],reverse=True)
-		n = len(colors)
-		sns.plt.sca(subplots[sidx])
-		for i in range(pcs.shape[0]):
-			f = sns.kdeplot(pcs[i],color=colors[i],**{'alpha':.5})
-			f.set_yticklabels('')
 			# a = ['','']
 			# a = np.append(a,np.arange(1,11)*0.1)
 			# f.set_xticklabels(a)
@@ -1385,17 +1417,18 @@ def submit_2_sge(network='human',cores=cores):
 	# run_networks('human',run=False,nrandomiters=1000,rankcut=.8,community_alg=community_alg,randomize_topology=True,permute_strength=False,plot_it=True)
 	# run_networks('structural_networks',run=False,nrandomiters=1000,rankcut=.8,community_alg=community_alg,randomize_topology=True,permute_strength=False,plot_it=True)
 
-networks = ['f_c_elegans','human','structural_networks']
-for network in networks:
-	print network
-	# plot_all_attacks(network)
-	# plot_all_betweenness(network,'betweenness')
-	# plot_all_betweenness(network,'edge betweenness')
-	# plot_all_clubness(network,True,False)
-	for community_alg in algorithms:
-		n = load_object('/%s/diverse_club/results/%s_0.8_%s_True_False.obj'%(homedir,network,community_alg))
-		for nn in n.networks:
-			check_network(nn)
+# networks = ['f_c_elegans','human','structural_networks']
+# for network in networks:
+# 	print network
+# 	# plot_all_attacks(network)
+# 	# plot_all_betweenness(network,'betweenness')
+# 	# plot_all_betweenness(network,'edge betweenness')
+# 	# plot_all_clubness(network,True,False)
+# 	for community_alg in algorithms:
+# 		n = load_object('/%s/diverse_club/results/%s_0.8_%s_True_False.obj'%(homedir,network,community_alg))
+# 		for nn in n.networks:
+# 			1/0
+# 			check_network(nn)
 # plot_all_attacks('f_c_elegans')
 # plot_all_betweenness('f_c_elegans','betweenness')
 # plot_all_betweenness('f_c_elegans','edge betweenness')
