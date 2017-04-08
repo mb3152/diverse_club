@@ -141,39 +141,28 @@ def make_airport_graph():
 	dests = pd.read_csv('/%s/diverse_club/graphs/routes.dat'%(homedir),header=None)[5].values
 	graph = Graph()
 	for s in sources:
-		if s in dests:
-			continue
-		try:
-			vs.append(int(s))
-		except:
-			continue
+		if s in dests: continue
+		try: vs.append(int(s))
+		except: continue
 	for s in dests:
-		try:
-			vs.append(int(s))
-		except:
-			continue
+		try: vs.append(int(s))
+		except: continue
 	graph.add_vertices(np.unique(vs).astype(str))
 	sources = pd.read_csv('/%s/diverse_club/graphs/routes.dat'%(homedir),header=None)[3].values
 	dests = pd.read_csv('/%s/diverse_club/graphs//routes.dat'%(homedir),header=None)[5].values
 	for s,d in zip(sources,dests):
-		if s == d:
-			continue
+		if s == d:continue
 		try:
 			int(s)
 			int(d)
-		except:
-			continue
-		if int(s) not in vs:
-			continue
-		if int(d) not in vs:
-			continue
+		except: continue
+		if int(s) not in vs: continue
+		if int(d) not in vs: continue
 		s = str(s)
 		d = str(d)
 		eid = graph.get_eid(s,d,error=False)
-		if eid == -1:
-			graph.add_edge(s,d,weight=1)
-		else:
-			graph.es[eid]['weight'] = graph.es[eid]["weight"] + 1
+		if eid == -1: graph.add_edge(s,d,weight=1)
+		else: graph.es[eid]['weight'] = graph.es[eid]["weight"] + 1
 	graph.delete_vertices(np.argwhere((np.array(graph.degree())==0)==True).reshape(-1))
 	v_to_d = []
 	for i in range(graph.vcount()):
@@ -448,34 +437,32 @@ def plot_pc_similarity(network):
 			sns.plt.savefig(savestr,dpi=600)
 			sns.plt.close()
 
-def plot_distribution(network,measure='pc'):
+def plot_degree_distribution(network,measure='pc'):
 	network_objects = []
-	if measure == 'pc': 
-		bw = 0.05
-	elif measure == 'degree': 
-		bw = 'scott'
+	bw = 'scott'
 	degree_titles = ['thresholded','dense']
-	if measure == 'pc':
-		for community_alg in algorithms:
-			network_objects.append(load_object('/%s/diverse_club/results/%s_0.8_%s_True_False.obj'%(homedir,network,community_alg)))
-	elif measure == 'degree':
-		network_objects.append(load_object('/%s/diverse_club/results/%s_0.8_%s_True_False.obj'%(homedir,network,'infomap')))
-		network_objects.append(load_object('/%s/diverse_club/results/%s_0.8_%s_True_False.obj'%(homedir,network,'walktrap_n')))
+	network_objects.append(load_object('/%s/diverse_club/results/%s_0.8_%s_True_False.obj'%(homedir,network,'infomap')))
+	network_objects.append(load_object('/%s/diverse_club/results/%s_0.8_%s_True_False.obj'%(homedir,network,'walktrap_n')))
 	if network == 'f_c_elegans':
 		iters = ['Worm1','Worm2','Worm3','Worm4']
 	if network == 'human':
 		iters = tasks
 	if network == 'structural_networks':
 		iters = ['c elegans','macaque','flight traffic','US power grid']
-	if measure == 'degree': algs = ['infomap','walktrap_n']
-	elif measure == 'pc': algs = algorithms
+	algs = ['infomap','walktrap_n']
+
+	sns.set_style('dark')
+	sns.set(font='Helvetica',rc={'axes.facecolor':'.5','axes.grid': False})
+	nconditions = len(network_objects)
+	fig,subplots = sns.plt.subplots(int(np.ceil(nconditions/2.)),2,figsize=(mm_2_inches(183),mm_2_inches(61.75*np.ceil(nconditions/2.))))
+	subplots = subplots.reshape(-1)	
+
 	for name_idx in iters:
 		nconditions = len(network_objects)
 		if measure == 'degree' and network != 'structural_networks': nconditions = nconditions + 1
 		fig,subplots = sns.plt.subplots(int(np.ceil(nconditions/2.)),2,figsize=(mm_2_inches(183),mm_2_inches(61.75*np.ceil(nconditions/2.))))
 		subplots = subplots.reshape(-1)
-		sns.set_style('dark')
-		sns.set(rc={'axes.facecolor':'.5','axes.grid': False})
+
 		for idx,n in enumerate(network_objects):
 			pcs = []
 			for nidx,nn in enumerate(n.networks):
@@ -512,7 +499,7 @@ def plot_distribution(network,measure='pc'):
 			f.set_yticklabels('')
 			if idx == 0:
 				patches = []
-				for color,name in zip(colors,np.arange(5,16)*0.01):
+				for color,name in zip(colors,np.arange(5,21)*0.01):
 					patches.append(mpl.patches.Patch(color=color,label=name,alpha=.75))
 				if measure == 'degree':patches.append(mpl.patches.Patch(color='black',label='mean/dense'))
 				if measure == 'pc':patches.append(mpl.patches.Patch(color='black',label='mean'))		
@@ -544,6 +531,181 @@ def plot_distribution(network,measure='pc'):
 			ax.set_axis_bgcolor("white")
 			sns.despine()
 			ax.set_axis_bgcolor('white')
+		sns.plt.tight_layout()
+		# sns.plt.show()
+		sns.plt.savefig(savestr)
+		sns.plt.close()
+
+def plot_structural_pc_distribution(network):
+	network_objects = []
+	for community_alg in algorithms: network_objects.append(load_object('/%s/diverse_club/results/structural_networks_0.8_%s_True_False.obj'%(homedir,community_alg)))
+	iters = ['c elegans','macaque','flight traffic','US power grid']
+	sns.set_style("white")
+	sns.set(font='Helvetica',rc={'axes.facecolor':'.5','axes.grid': False})
+	for name_idx,name in enumerate(iters):
+
+		colors = np.zeros((9,3))
+		colors[np.ix_([0,1])] = sns.cubehelix_palette(8)[-3],sns.cubehelix_palette(8)[3]
+		colors[np.ix_([2,3,4,5,6,7,8])] = np.array(sns.color_palette("cubehelix", 18))[-7:]
+		fig,subplots = sns.plt.subplots(2,2,figsize=(mm_2_inches(183),mm_2_inches(61.75*4)))
+		subplots = subplots.reshape(-1)
+		pcs = []
+		for algidx,plotalg in enumerate(algorithms[:-2]):
+	
+			for nidx,nn in enumerate(network_objects[algidx].networks):
+				if network_objects[algidx].names[nidx].split('_')[0] != '%s'%(name) and network_objects[algidx].names[nidx].split('_')[0] != '%s'%(name.lower()):
+					continue
+				pcs.append(nn.pc)
+		pcs = np.array(pcs)
+		sns.plt.sca(subplots[0])
+		means = []
+		for i in range(pcs.shape[0]):
+			f = sns.kdeplot(pcs[i],color=colors[i],bw=.05,**{'alpha':.5,'label':algorithm_names[i]})
+			means.append(f.lines[0].get_data()[1])
+		mean = np.nanmean(means,axis=0)
+		newax = subplots[0].twiny()
+		m = sns.tsplot(mean,color='black',ax=newax,**{'alpha':.5})
+		sns.plt.legend(ncols=2)
+		sns.plt.title('%s\nparticipation coefficient\ndistributions'%(name))
+		# newax.legend(loc=(.315,.53))
+		m.set_yticklabels('')
+		m.set_xticklabels('')
+		f.set_yticklabels('')
+		f.set_xticklabels(['',0,0.2,.4,.6,.8,''])
+		
+		pcs = []
+		n_community_sizes = []
+		for nidx,nn in enumerate(network_objects[7].networks):
+			if network_objects[7].names[nidx].split('_')[0] != '%s'%(name) and network_objects[7].names[nidx].split('_')[0] != '%s'%(name.lower()):
+				continue
+			pcs.append(nn.pc)
+			n_community_sizes.append(len(nn.community.sizes()))
+		n_community_sizes.append(n_community_sizes[-1])
+		n_community_sizes = np.flip(n_community_sizes,0)
+		
+		pcs = np.array(pcs)
+		sns.plt.sca(subplots[1])
+		means = []
+		colors = sns.light_palette("red",pcs.shape[0],reverse=True)
+		for i in range(pcs.shape[0]):
+			f = sns.kdeplot(pcs[i],color=colors[i],bw=.05,**{'alpha':.5,'label':n_community_sizes[i]})
+			means.append(f.lines[0].get_data()[1])
+		mean = np.nanmean(means,axis=0)
+		newax = subplots[1].twiny()
+		m = sns.tsplot(mean,color='black',ax=newax,**{'alpha':.5})
+		sns.plt.legend(ncols=2)
+		# newax.legend(loc=(.70,.05))
+		m.set_yticklabels('')
+		m.set_xticklabels('')
+		f.set_yticklabels('')
+		f.set_xticklabels(['',0,0.2,.4,.6,.8,''])
+		sns.plt.title('walktrap (n)')
+		
+
+		pcs = []
+		n_community_sizes = []
+		for nidx,nn in enumerate(network_objects[8].networks):
+			if network_objects[8].names[nidx].split('_')[0] != '%s'%(name) and network_objects[8].names[nidx].split('_')[0] != '%s'%(name.lower()):
+				continue
+			pcs.append(nn.pc)
+			n_community_sizes.append(len(nn.community.sizes()))
+		
+		pcs = np.array(pcs)
+		sns.plt.sca(subplots[2])
+		means = []
+		colors = sns.light_palette("red",pcs.shape[0],reverse=True)
+		for i in range(pcs.shape[0]):
+			f = sns.kdeplot(pcs[i],color=colors[i],bw=.05,**{'alpha':.5,'label':n_community_sizes[i]})
+			means.append(f.lines[0].get_data()[1])
+		mean = np.nanmean(means,axis=0)
+		newax = subplots[2].twiny()
+		m = sns.tsplot(mean,color='black',ax=newax,**{'alpha':.5})
+		sns.plt.legend(ncols=2)
+		# newax.legend(loc=(.70,.05))
+		m.set_yticklabels('')
+		m.set_xticklabels('')
+		f.set_yticklabels('')
+		f.set_xticklabels(['',0,0.2,.4,.6,.8,''])
+		sns.plt.title('louvain (resolution)')
+	
+		savestr = '/%s/diverse_club/figures/individual/%s_dist_%s.pdf'%(homedir,measure,name)
+		ax = subplots[-1]
+		ax.get_xaxis().set_visible(False)
+		ax.get_yaxis().set_visible(False)
+		ax.set_axis_bgcolor("white")
+		ax.spines['left'].set_color('white')
+		ax.spines['bottom'].set_color('white')
+		ax.spines['top'].set_color('white')
+		ax.spines['right'].set_color('white')
+		ax.set_axis_bgcolor('white')
+		sns.plt.tight_layout()
+		sns.plt.savefig(savestr)
+		sns.plt.close()
+
+def plot_pc_distribution(network):
+	network_objects = []
+	bw = 0.05
+	for community_alg in algorithms: network_objects.append(load_object('/%s/diverse_club/results/%s_0.8_%s_True_False.obj'%(homedir,network,community_alg)))
+	if network == 'f_c_elegans': iters = ['Worm1','Worm2','Worm3','Worm4']
+	if network == 'human': iters = tasks
+	algs = algorithms
+	sns.set_style('dark')
+	sns.set(font='Helvetica',rc={'axes.facecolor':'.5','axes.grid': False})
+	for name_idx in iters:
+		fig,subplots = sns.plt.subplots(5,2,figsize=(mm_2_inches(183),mm_2_inches(61.75*np.ceil(nconditions/2.))))
+		subplots = subplots.reshape(-1)
+		plt.text(1.05, 1.13, name_idx.lower() + ' participation coefficient distributions', transform = subplots[0].transAxes, horizontalalignment='center', fontsize=12,)
+		for idx,n in enumerate(network_objects):
+			pcs = []
+			for nidx,nn in enumerate(n.networks):
+				if n.names[nidx].split('_')[0] != '%s'%(name_idx) and  n.names[nidx].split('_')[0] != '%s'%(name_idx.lower()):
+					continue
+				pcs.append(nn.pc)
+			pcs = np.array(pcs)
+			if algs[idx] == 'walktrap_n':
+				pcs = np.flip(pcs,axis=0)
+				n_community_sizes = []
+				for nidx,nn in enumerate(n.networks):
+					if n.names[nidx].split('_')[0] != '%s'%(name_idx) and  n.names[nidx].split('_')[0] != '%s'%(name_idx.lower()):
+						continue
+					n_community_sizes.append(len(nn.community.sizes()))
+			if algs[idx] == 'louvain_res':
+				l_community_sizes = []
+				for nidx,nn in enumerate(n.networks):
+					if n.names[nidx].split('_')[0] != '%s'%(name_idx) and  n.names[nidx].split('_')[0] != '%s'%(name_idx.lower()):
+						continue
+					l_community_sizes.append(len(nn.community.sizes()))
+				l_community_sizes.append(l_community_sizes[-1])
+			colors = sns.light_palette("red",pcs.shape[0],reverse=True)
+			sns.plt.sca(subplots[idx])
+			means = []
+			for i in range(pcs.shape[0]):
+				f = sns.kdeplot(pcs[i],color=colors[i],bw=bw,**{'alpha':.5})
+				means.append(f.lines[0].get_data()[1])
+			mean = np.nanmean(means,axis=0)
+			m = sns.tsplot(mean,color='black',ax=subplots[idx].twiny(),**{'alpha':.5})
+			m.set_yticklabels('')
+			m.set_xticklabels('')
+			f.set_title(algorithm_names[idx])
+			f.set_yticklabels('')
+			f.set_xticklabels(['',0,0.2,.4,.6,.8,''])
+
+		patches = []
+		colors = sns.light_palette("red",16,reverse=True)
+		for color,name,ls,ns, in zip(colors,np.arange(5,21)*0.01,l_community_sizes,np.flip(n_community_sizes,0)):
+			name = str(name) + ', ' + str(ls) + ', ' + str(ns)
+			patches.append(mpl.patches.Patch(color=color,label=name,alpha=.85))
+		patches.append(mpl.patches.Patch(color='black',label='mean'))		
+		savestr = '/%s/diverse_club/figures/individual/%s_dist_%s.pdf'%(homedir,measure,'%s_%s'%(network,name_idx))
+		ax = subplots[-1]
+		ax.legend(handles=patches,ncol=2,loc=10,title='graph density,\n$\it{n}$ communities walktrap (n),\n$\it{n}$ communities louvain (resolution)')
+		ax.get_xaxis().set_visible(False)
+		ax.get_yaxis().set_visible(False)
+		ax.set_axis_bgcolor("white")
+		ax.spines['left'].set_color('white')
+		ax.spines['bottom'].set_color('white')
+		ax.set_axis_bgcolor('white')
+		sns.despine()
 		sns.plt.tight_layout()
 		sns.plt.savefig(savestr)
 		sns.plt.close()
@@ -1486,6 +1648,169 @@ def airport_analyses():
 		print num_int
 		degree_int.append(num_int)
 
+def make_graph(variables):
+	n_nodes = variables[0]
+	np.random.seed(variables[1])
+	graph = Graph()
+	graph.add_vertices(n_nodes)
+	while True:
+		i = np.random.randint(0,n_nodes)
+		j = np.random.randint(0,n_nodes)
+		if i == j:
+			continue
+		if graph.get_eid(i,j,error=False) == -1:
+			graph.add_edge(i,j,weight=1)
+		if graph.density() > .05 and graph.is_connected() == True:
+			break
+	graph.es["weight"] = np.ones(graph.ecount())
+	return graph
+
+def generative(variables):
+	metric = variables[0]
+	n_nodes = variables[1]
+	density = variables[2]
+	graph = variables[3]
+	np.random.seed(variables[4])
+	all_shortest = variables[5]
+	print variables[4],variables[0]
+	q_ratio = variables[6]
+	rccs = []
+	for idx in range(150):
+		delete_edges = graph.get_edgelist()
+		if metric != 'none':
+			vc = graph.community_fastgreedy().as_clustering()
+			orig_q = vc.modularity
+			membership = vc.membership
+			orig_sps = np.sum(np.array(graph.shortest_paths()))
+			community_matrix = brain_graphs.community_matrix(membership,0)
+			np.fill_diagonal(community_matrix,1)
+			orig_bc_sps = np.sum(np.array(graph.shortest_paths())[community_matrix!=1])
+			q_edge_scores = []
+			sps_edge_scores = []
+			for edge in delete_edges:
+				eid = graph.get_eid(edge[0],edge[1],error=False)
+				graph.delete_edges(eid)
+				q_edge_scores.append(VertexClustering(graph,membership).modularity-orig_q)
+				if all_shortest == 'all':
+					sps_edge_scores.append(orig_sps-np.sum(np.array(graph.shortest_paths())))
+				if all_shortest == 'bc':
+					sps_edge_scores.append(orig_bc_sps-np.sum(np.array(graph.shortest_paths())[community_matrix!=1]))
+				graph.add_edge(edge[0],edge[1],weight=1)
+			q_edge_scores = np.array(q_edge_scores)#Q when edge removed - original Q. High means increase in Q when edge removed.
+			sps_edge_scores = np.array(sps_edge_scores)#original sps minus sps when edge removed. Higher value means more efficient.
+			assert np.isnan(q_edge_scores).any() == False
+			assert np.isnan(sps_edge_scores).any() == False
+			if len(np.unique(sps_edge_scores)) > 1:
+				q_edge_scores = scipy.stats.zscore(scipy.stats.rankdata(q_edge_scores,method='min'))
+				sps_edge_scores = scipy.stats.zscore(scipy.stats.rankdata(sps_edge_scores,method='min'))
+				scores = (q_edge_scores*q_ratio) + (sps_edge_scores*(1-q_ratio))
+			else:
+				scores = scipy.stats.rankdata(q_edge_scores,method='min')
+			
+		if metric == 'q':
+			edges = np.array(delete_edges)[np.argsort(scores)][int(-(graph.ecount()*.05)):]
+			edges = np.array(list(edges)[::-1])
+		if metric == 'none':
+			scores = np.random.randint(0,100,(int(graph.ecount()*.05))).astype(float)
+			edges = np.array(delete_edges)[np.argsort(scores)]
+		for edge in edges:
+			eid = graph.get_eid(edge[0],edge[1],error=False)
+			graph.delete_edges(eid)
+			if graph.is_connected() == False:
+				graph.add_edge(edge[0],edge[1],weight=1)
+				continue
+			while True:
+				i = np.random.randint(0,n_nodes)
+				j = np.random.randint(0,n_nodes)
+				if i == j:
+					continue
+				if graph.get_eid(i,j,error=False) == -1:
+					graph.add_edge(i,j,weight=1)
+					break
+		sys.stdout.flush()
+		vc = brain_graphs.brain_graph(graph.community_fastgreedy().as_clustering())
+		pc = vc.pc
+		pc[np.isnan(pc)] = 0.0
+		pc_emperical_phis = RC(graph,scores=pc).phis()
+		pc_average_randomized_phis = np.nanmean([RC(preserve_strength(graph,randomize_topology=True),scores=pc).phis() for i in range(25)],axis=0)
+		pc_normalized_phis = pc_emperical_phis/pc_average_randomized_phis
+		degree_emperical_phis = RC(graph, scores=graph.strength(weights='weight')).phis()
+		average_randomized_phis = np.nanmean([RC(preserve_strength(graph,randomize_topology=True),scores=graph.strength(weights='weight')).phis() for i in range(25)],axis=0)
+		degree_normalized_phis = degree_emperical_phis/average_randomized_phis
+		rcc = pc_normalized_phis[-10:]
+		if np.isfinite(np.nanmean(rcc)):
+			rccs.append(np.nanmean(rcc))	
+	return [metric,pc_normalized_phis,degree_normalized_phis,graph]
+
+def generative_model(n_nodes=100,iters=100,cores=40,all_shortest='all',q_ratio=.9):
+	if n_nodes == 100:
+		density= 0.05
+	if n_nodes == 200:
+		density = 0.025
+	if n_nodes == 264:
+		density = 0.02
+	if n_nodes == 300:
+		density = 0.015
+	pool = Pool(cores)
+	none_deg_rc = []
+	none_pc_rc = []
+	none_graphs = []
+	both_deg_rc = []
+	both_pc_rc = []
+	both_graphs = []
+	variables = []
+	for i in range(iters):
+		variables.append([n_nodes,i])
+	graphs = pool.map(make_graph,variables)
+	variables = []
+
+	for i,g in enumerate(graphs):
+		variables.append(['none',n_nodes,density,g.copy(),i,all_shortest,q_ratio])
+	for i,g in enumerate(graphs):
+		variables.append(['q',n_nodes,density,g.copy(),i,all_shortest,q_ratio])
+	sys.stdout.flush()
+	results = pool.map(generative,variables)
+	for r in results:
+		if r[0] == 'none':
+			none_pc_rc.append(r[1])
+			none_deg_rc.append(r[2])
+			none_graphs.append(r[3])
+		else:
+			both_pc_rc.append(r[1])
+			both_deg_rc.append(r[2])
+			both_graphs.append(r[3])
+	with open('/home/despoB/mb3152/dynamic_mod/results/new_gen_results/rich_club_gen_graphs_none_%s_%s_%s_%s'%(iters,n_nodes,all_shortest,q_ratio),'w+') as f:
+		pickle.dump(none_graphs,f)
+	with open('/home/despoB/mb3152/dynamic_mod/results/new_gen_results/rich_club_gen_graphs_both_%s_%s_%s_%s'%(iters,n_nodes,all_shortest,q_ratio),'w+') as f:
+		pickle.dump(both_graphs,f)
+	np.save('/home/despoB/mb3152/dynamic_mod/results/new_gen_results/rich_club_gen_pc_none_%s_%s_%s_%s.npy'%(iters,n_nodes,all_shortest,q_ratio),np.array(none_pc_rc))
+	np.save('/home/despoB/mb3152/dynamic_mod/results/new_gen_results/rich_club_gen_deg_none_%s_%s_%s_%s.npy'%(iters,n_nodes,all_shortest,q_ratio),np.array(none_deg_rc))
+	np.save('/home/despoB/mb3152/dynamic_mod/results/new_gen_results/rich_club_gen_pc_both_%s_%s_%s_%s.npy'%(iters,n_nodes,all_shortest,q_ratio),np.array(both_pc_rc))
+	np.save('/home/despoB/mb3152/dynamic_mod/results/new_gen_results/rich_club_gen_deg_both_%s_%s_%s_%s.npy'%(iters,n_nodes,all_shortest,q_ratio),np.array(both_deg_rc))
+
+	with open('/home/despoB/mb3152/dynamic_mod/results/new_gen_results/rich_club_gen_graphs_none_%s_%s_%s_%s'%(iters,n_nodes,all_shortest,q_ratio),'r') as f:
+		none_graphs = pickle.load(f)
+	with open('/home/despoB/mb3152/dynamic_mod/results/new_gen_results/rich_club_gen_graphs_both_%s_%s_%s_%s'%(iters,n_nodes,all_shortest,q_ratio),'r') as f:
+		both_graphs = pickle.load(f)
+	none_mods = []
+	for g in none_graphs:
+		none_mods.append(g.community_fastgreedy().as_clustering().modularity)
+	both_mods = []
+	for g in both_graphs:
+		both_mods.append(g.community_fastgreedy().as_clustering().modularity)
+	print 'Q results, real | random'
+	print 'means: ', scipy.stats.ttest_ind(both_mods,none_mods)
+	print 't_test:', np.mean(both_mods),np.mean(none_mods)
+	none_mods = []
+	for g in none_graphs:
+		none_mods.append(np.sum(g.shortest_paths()))
+	both_mods = []
+	for g in both_graphs:
+		both_mods.append(np.sum(g.shortest_paths()))
+	print 'SP results, real | random'
+	print 'means: ', scipy.stats.ttest_ind(both_mods,none_mods)
+	print 't_test:', np.mean(both_mods),np.mean(none_mods)
+
 def submit_2_sge(network='human',cores=cores):
 	for algorithm in algorithms:
 		if algorithm == 'walktrap_n' or algorithm == 'louvain_res':
@@ -1498,16 +1823,17 @@ def submit_2_sge(network='human',cores=cores):
 			os.system(command)
 
 networks = ['f_c_elegans','human','structural_networks']
-for network in networks[-1:]:
+for network in networks:
+	print network
+	n = make_networks(network,0.8,'infomap')
+	for nn in n.networks:
+		check_network(nn)
 	# plot_distribution(network,measure='degree')
-	plot_distribution(network,measure='pc')
+	# plot_distribution(network,measure='pc')
 
 if len(sys.argv) > 1:
 	if sys.argv[1] == 'run':
 		run_networks(sys.argv[2],run=True,nrandomiters=1000,rankcut=.8,community_alg=sys.argv[3],randomize_topology=True,permute_strength=False)
-
-
-
 
 
 
