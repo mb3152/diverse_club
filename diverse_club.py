@@ -298,6 +298,7 @@ def plot_community_stats(network,measure='sizes'):
 		if measure == 'q':
 			plot_matrix = q_values
 			fmt = ".2f"
+		plot_matrix[plot_matrix<0.0] = 0.0
 		heatfig = sns.heatmap(plot_matrix,annot=True,xticklabels=[''],yticklabels=np.flip(algorithm_names,0),square=True,rasterized=True,ax=subplots[sidx],cbar=False,fmt=fmt,annot_kws={"size": 5})
 		heatfig.set_yticklabels(np.flip(heatfig.axes.get_yticklabels(),0),rotation=360,fontsize=6)
 		heatfig.set_xlabel('density, resolution (louvain), or n (walktrap)')
@@ -437,92 +438,73 @@ def plot_pc_similarity(network):
 			sns.plt.savefig(savestr,dpi=600)
 			sns.plt.close()
 
-def plot_degree_distribution(network,measure='pc'):
+def plot_degree_distribution(network):
 	network_objects = []
-	bw = 'scott'
-	degree_titles = ['thresholded','dense']
 	network_objects.append(load_object('/%s/diverse_club/results/%s_0.8_%s_True_False.obj'%(homedir,network,'infomap')))
 	network_objects.append(load_object('/%s/diverse_club/results/%s_0.8_%s_True_False.obj'%(homedir,network,'walktrap_n')))
-	if network == 'f_c_elegans':
-		iters = ['Worm1','Worm2','Worm3','Worm4']
-	if network == 'human':
-		iters = tasks
-	if network == 'structural_networks':
-		iters = ['c elegans','macaque','flight traffic','US power grid']
-	algs = ['infomap','walktrap_n']
+	if network == 'f_c_elegans': iters = ['Worm1','Worm2','Worm3','Worm4']
+	if network == 'human': iters = tasks
+	if network == 'structural_networks': iters = ['c elegans','macaque','flight traffic','US power grid']
 
 	sns.set_style('dark')
 	sns.set(font='Helvetica',rc={'axes.facecolor':'.5','axes.grid': False})
-	nconditions = len(network_objects)
+	nconditions = len(iters)
+	if network == 'f_c_elegans': nconditions = nconditions + 1
 	fig,subplots = sns.plt.subplots(int(np.ceil(nconditions/2.)),2,figsize=(mm_2_inches(183),mm_2_inches(61.75*np.ceil(nconditions/2.))))
-	subplots = subplots.reshape(-1)	
+	subplots = subplots.reshape(-1)
 
-	for name_idx in iters:
-		nconditions = len(network_objects)
-		if measure == 'degree' and network != 'structural_networks': nconditions = nconditions + 1
-		fig,subplots = sns.plt.subplots(int(np.ceil(nconditions/2.)),2,figsize=(mm_2_inches(183),mm_2_inches(61.75*np.ceil(nconditions/2.))))
-		subplots = subplots.reshape(-1)
-
-		for idx,n in enumerate(network_objects):
-			pcs = []
-			for nidx,nn in enumerate(n.networks):
-				if n.names[nidx].split('_')[0] != '%s'%(name_idx) and  n.names[nidx].split('_')[0] != '%s'%(name_idx.lower()):
+	for idx,name in enumerate(iters):
+		bw = 'scott'
+		if name =='US power grid': bw = 1
+		if name == 'flight traffic': bw = 5
+		if network != 'structural_networks':
+			degrees = []
+			for nidx,nn in enumerate(network_objects[0].networks):
+				if network_objects[0].names[nidx].split('_')[0] != '%s'%(name) and  network_objects[0].names[nidx].split('_')[0] != '%s'%(name.lower()):
 					continue
-				if measure == 'pc': pcs.append(nn.pc)
-				elif measure == 'degree': pcs.append(nn.community.graph.strength(weights='weight'))
-			pcs = np.array(pcs)
-			if measure == 'degree' and network != 'structural_networks':
-				if idx != 0: pcs = pcs[0]
-			if network == 'structural_networks':
-				if measure == 'degree': 
-					pcs = pcs[0]
-				if measure == 'pc': 
-					if algs[idx] not in algs[-2:]: pcs = pcs[0]
-			if algs[idx] == 'walktrap_n': pcs = np.flip(pcs,axis=0)
-			colors = sns.light_palette("red",pcs.shape[0],reverse=True)
+				degrees.append(nn.community.graph.strength(weights='weight'))
+
+			degrees = np.array(degrees)
+			colors = sns.light_palette("red",degrees.shape[0],reverse=True)
 			sns.plt.sca(subplots[idx])
 			means = []
-			# if len(pcs.shape) > 1 and network != 'structural_networks' or algs[idx] in algs[-2:]:
-			if len(pcs.shape) > 1:
-				for i in range(pcs.shape[0]):
-					f = sns.kdeplot(pcs[i],color=colors[i],bw=bw,**{'alpha':.5})
-					means.append(f.lines[0].get_data()[1])
-				mean = np.nanmean(means,axis=0)
-				m = sns.tsplot(mean,color='black',ax=subplots[idx].twiny(),**{'alpha':.5})
-				m.set_yticklabels('')
-				m.set_xticklabels('')
-			else: 
-				f = sns.kdeplot(pcs,color='black',bw=bw,cut=1,**{'alpha':.5})
-			if measure == 'degree': f.set_title(degree_titles[idx])
-			if measure == 'pc': f.set_title(algs[idx])
-			
-			f.set_yticklabels('')
-			if idx == 0:
-				patches = []
-				for color,name in zip(colors,np.arange(5,21)*0.01):
-					patches.append(mpl.patches.Patch(color=color,label=name,alpha=.75))
-				if measure == 'degree':patches.append(mpl.patches.Patch(color='black',label='mean/dense'))
-				if measure == 'pc':patches.append(mpl.patches.Patch(color='black',label='mean'))		
-		savestr = '/%s/diverse_club/figures/individual/%s_dist_%s.pdf'%(homedir,measure,'%s_%s'%(network,name_idx))
-		if network != 'structural_networks':
-			ax = subplots[-1]
-			ax.legend(handles=patches,loc=10)
-			ax.get_xaxis().set_visible(False)
-			ax.get_yaxis().set_visible(False)
-			ax.set_axis_bgcolor("white")
-			ax.spines['left'].set_color('white')
-			ax.spines['bottom'].set_color('white')
-			ax.set_axis_bgcolor('white')
-			sns.despine()
-		elif network == 'structural_networks' and measure == 'pc':
-			ax = subplots[-1]
-			ax.imshow(np.arange(16).reshape(1, 16),cmap=mpl.colors.ListedColormap(list(colors)),interpolation="nearest", aspect="auto")
-			ax.set_ylim(0,1)
-			ax.set_xticklabels('')
-			ax.set_yticklabels('')
-			ax.set_xlabel('More Communities              Fewer Communities')
-			ax.set_axis_bgcolor("white")
-		if nconditions - idx == 2:
+			for i in range(degrees.shape[0]):
+				f = sns.kdeplot(degrees[i],color=colors[i],bw=bw,**{'alpha':.5})
+				means.append(f.lines[0].get_data()[1])
+			mean = np.nanmean(means,axis=0)
+			m = sns.tsplot(mean,color='black',ax=subplots[idx].twiny(),**{'alpha':.5})
+			m.set_yticklabels('')
+			m.set_xticklabels('')
+		for nidx,nn in enumerate(network_objects[1].networks):
+			if network_objects[1].names[nidx].split('_')[0] != '%s'%(name) and  network_objects[1].names[nidx].split('_')[0] != '%s'%(name.lower()):
+				continue
+			degree = nn.community.graph.strength(weights='weight')
+		if network != 'structural_networks': 
+			d = sns.kdeplot(np.array(degree),ax=subplots[idx].twiny(),color='purple',bw=bw,**{'alpha':.5})
+			d.set_yticklabels('')
+			d.set_xticklabels('')
+		if network == 'structural_networks': 
+			d = sns.kdeplot(np.array(degree),ax=subplots[idx],color='red',bw=bw,label='degree',**{'alpha':.5})
+			d.legend()
+			d.set_yticklabels('')
+		d.set_title(name.lower())
+	if network != 'structural_networks':
+		patches = []
+		for color,name in zip(colors,np.arange(5,21)*0.01):
+			patches.append(mpl.patches.Patch(color=color,label=name,alpha=.75))
+		patches.append(mpl.patches.Patch(color='black',label='mean, thresholded'))
+		patches.append(mpl.patches.Patch(color='purple',label='dense'))		
+		
+		ax = subplots[-1]
+		ax.legend(handles=patches,ncol=2,loc=10)
+		ax.get_xaxis().set_visible(False)
+		ax.get_yaxis().set_visible(False)
+		ax.set_axis_bgcolor("white")
+		ax.spines['left'].set_color('white')
+		ax.spines['bottom'].set_color('white')
+		ax.set_axis_bgcolor('white')
+		sns.despine()
+		if network != 'human':
 			ax = subplots[-2]
 			ax.get_xaxis().set_visible(False)
 			ax.get_yaxis().set_visible(False)
@@ -531,10 +513,11 @@ def plot_degree_distribution(network,measure='pc'):
 			ax.set_axis_bgcolor("white")
 			sns.despine()
 			ax.set_axis_bgcolor('white')
-		sns.plt.tight_layout()
-		# sns.plt.show()
-		sns.plt.savefig(savestr)
-		sns.plt.close()
+	savestr = '/%s/diverse_club/figures/individual/%s_degree.pdf'%(homedir,network)
+	sns.plt.tight_layout()
+	sns.plt.savefig(savestr)
+	sns.plt.show()
+	sns.plt.close()
 
 def plot_structural_pc_distribution(network):
 	network_objects = []
@@ -689,6 +672,7 @@ def plot_pc_distribution(network):
 			f.set_title(algorithm_names[idx])
 			f.set_yticklabels('')
 			f.set_xticklabels(['',0,0.2,.4,.6,.8,''])
+
 
 		patches = []
 		colors = sns.light_palette("red",16,reverse=True)
@@ -1015,10 +999,9 @@ def plot_all_betweenness(network,measure='betweenness'):
 	sns.despine()
 	sns.plt.tight_layout()
 	sns.plt.savefig('%s/diverse_club/figures/%s_all_%s.pdf'%(homedir,network,measure))
-	sns.plt.show()
 	sns.plt.close()
 
-def plot_all_clubness(network,randomize_topology,permute_strength):
+def plot_all_clubness(network,randomize_topology=True,permute_strength=False):
 	if network == 'human':
 		condition_name = 'task'
 		percent_cutoff = .95
@@ -1247,14 +1230,15 @@ def plot_all_intersect(network):
 	final_df['community algorithm'] = newintdf['community algorithm'][newintdf.club == 'diverse']
 	final_df['condition'] = newintdf['condition'][newintdf.club == 'diverse']
 
-	fig,subplots = sns.plt.subplots(2,1,figsize=(mm_2_inches(183),mm_2_inches(61.75*np.ceil((nconditions+1)/2.))))
+	fig,subplots = sns.plt.subplots(2,1,figsize=(mm_2_inches(183),mm_2_inches(61.75*4)))
 	sns.set(context="paper",font='Helvetica',style='white')
 	ax = sns.barplot(y='condition', x="percent overlap", hue='community algorithm', palette=colors,data=df,orient="h",ax=subplots[0])
+	ax.set_xlabel('percentage of club nodes in both clubs')
 	ax.set_xlim((0,1))
 	ax1 = sns.barplot(y='condition', x='difference, percentage of communities with a diverse club node minus percentage of communities with a rich club node', hue='community algorithm', palette=colors,data=final_df,orient="h",ax=subplots[1])
 	ax1.legend_.remove()
+	ax1.set_xlabel('difference, percentage of communities with a diverse club node\nminus percentage of communities with a rich club node')
 	sns.plt.savefig('/%s/diverse_club/figures/%s_all_intersect.pdf'%(homedir,network))
-	sns.plt.show()
 
 def plot_matrices(n,filter_name,savestr):
 	to_plot = []
@@ -1556,11 +1540,11 @@ def rename():
 		os.system ('mv %s %s' %(f,new))
 
 def run_networks(network,run=False,nrandomiters=1000,rankcut=.8,community_alg='infomap',randomize_topology=True,permute_strength=False,plot_it=False):
-	# network='structural_networks'
+	# network='f_c_elegans'
 	# run=False
-	# nrandomiters=1000
+	# nrandomiters=100
 	# rankcut=.8
-	# community_alg='infomap'
+	# community_alg='walktrap_n'
 	# randomize_topology=True
 	# permute_strength=False
 	# plot_it=True
@@ -1822,12 +1806,20 @@ def submit_2_sge(network='human',cores=cores):
 			%(cores,homedir,homedir,algorithm,network,algorithm)
 			os.system(command)
 
-networks = ['f_c_elegans','human','structural_networks']
-for network in networks:
-	print network
-	n = make_networks(network,0.8,'infomap')
-	for nn in n.networks:
-		check_network(nn)
+# networks = ['f_c_elegans','human','structural_networks']
+# for network in networks:
+	# print network
+	# plot_all_intersect(network)
+	# plot_all_attacks(network)
+	# plot_all_clubness(network)
+	# plot_all_betweenness(network,measure='betweenness')
+	# plot_all_betweenness(network,measure='edge betweenness')
+
+	# plot_community_stats('f_c_elegans',measure='q')
+	# plot_degree_distribution(network)
+	# n = make_networks(network,0.8,'infomap')
+	# for nn in n.networks:
+	# 	check_network(nn)
 	# plot_distribution(network,measure='degree')
 	# plot_distribution(network,measure='pc')
 
