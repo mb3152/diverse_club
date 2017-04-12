@@ -55,7 +55,7 @@ global algorithm_names
 global cores
 cores = 2
 algorithm_names = np.array(['infomap','walktrap','spectral','edge betweenness','label propogation','louvain','spin glass','walktrap (n)','louvain (resolution)'])
-algorithms = np.array(['infomap','walktrap','spectral','edge_betweenness','label_propogation','louvain','spin_glass','walktrap_n','louvain_res'])
+algorithms = np.array(['infomap','walktrap','spectral','edge_betweenness','label_propogation','louvain','spin_glass','walktrap_n','louvain_res','random'])
 order = np.array(['infomap','walktrap','spectral','edge_betweenness','label_propogation','louvain','spin_glass','rich club, thresholded','rich club, dense','walktrap_n','louvain_res'])
 
 def corrfunc(x, y, **kws):
@@ -324,9 +324,10 @@ def plot_community_stats(network,measure='sizes'):
 	sns.plt.savefig('%s/diverse_club/figures/%s_all_%s.pdf'%(homedir,network,measure))
 	sns.plt.close()
 
-def plot_pc_similarity(network):
-	def plot_pc_correlations(matrix,labels,nlabels,title,savestr):
-		heatmap = sns.heatmap(pd.DataFrame(matrix,columns=labels),square=True,yticklabels=nlabels,xticklabels=nlabels,cmap = "RdBu_r",**{'vmin':-1,'vmax':1.0})
+def plot_similarity(network,measure='nmi'):
+	def plot_pc_correlations(matrix,labels,nlabels,title,savestr,measure):
+		if measure == 'nmi': heatmap = sns.heatmap(pd.DataFrame(matrix,columns=labels),square=True,yticklabels=nlabels,xticklabels=nlabels,**{'vmin':0.0,'vmax':1.0})
+		else: heatmap = sns.heatmap(pd.DataFrame(matrix,columns=labels),square=True,yticklabels=nlabels,xticklabels=nlabels,cmap = "RdBu_r",**{'vmin':-1,'vmax':1.0})
 		heatmap.set_xticklabels(heatmap.axes.get_xticklabels(),rotation=90,fontsize=6)
 		heatmap.set_yticklabels(np.flip(heatmap.axes.get_xticklabels(),0),rotation=360,fontsize=6)
 		mean=np.nanmean(matrix[matrix!=1])
@@ -346,7 +347,7 @@ def plot_pc_similarity(network):
 			plot_network_objects = []
 			for i in range(len(network_objects)):
 				if algorithms[i] == 'louvain_res':
-					subsetiters = np.linspace(.25,.75,15)
+					subsetiters = np.linspace(.4,.8,16)
 				elif algorithms[i] == 'walktrap_n':
 					subsetiters = np.array([5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20])
 				else:
@@ -361,24 +362,31 @@ def plot_pc_similarity(network):
 			task_pc_matrix = np.zeros((len(plot_network_objects),len(plot_network_objects)))
 			for i in range(len(plot_network_objects)):
 				for j in range(len(plot_network_objects)):
-					task_pc_matrix[i,j] = scipy.stats.spearmanr(plot_network_objects[i].pc,plot_network_objects[j].pc)[0]
+					if measure == 'nmi': task_pc_matrix[i,j] = normalized_mutual_info_score(plot_network_objects[i].community.membership,plot_network_objects[j].community.membership)
+					else: task_pc_matrix[i,j] = scipy.stats.spearmanr(plot_network_objects[i].pc,plot_network_objects[j].pc)[0]
 			matrices.append(task_pc_matrix)
-			savestr = '/%s/diverse_club/figures/individual/pc_similarity_algorithms_human_%s.pdf'%(homedir,task)
-			plot_pc_correlations(task_pc_matrix,labels,4,'human (%s)'%(task.lower()),savestr)
+			savestr = '/%s/diverse_club/figures/individual/%s_similarity_algorithms_human_%s.pdf'%(homedir,measure,task)
+			plot_pc_correlations(task_pc_matrix,labels,4,'human (%s)'%(task.lower()),savestr,measure)
+			savestr = savestr.replace('figures/individual','results')
+			savestr = savestr.replace('pdf','npy')
+			np.save(savestr,task_pc_matrix)
 		savestr = '/%s/diverse_club/figures/pc_similarity_algorithms_human_mean.pdf'%(homedir)
-		plot_pc_correlations(np.nanmean(matrices,axis=0),labels,4,'human, mean across tasks',savestr)
+		plot_pc_correlations(np.nanmean(matrices,axis=0),labels,4,'human, mean across tasks',savestr,measure)
+		savestr = savestr.replace('figures','results')
+		savestr = savestr.replace('pdf','npy')
+		np.save(savestr,np.nanmean(matrices,axis=0))
 	if network == 'f_c_elegans':
 		network_objects = []
-		matrices = []
 		for community_alg in algorithms:
 			network_objects.append(load_object('/%s/diverse_club/results/%s_0.8_%s_True_False.obj'%(homedir,network,community_alg)))
+		matrices = []
 		for worm in ['Worm1','Worm2','Worm3','Worm4']:
 			labels = []
 			alglabels = []
 			plot_network_objects = []
 			for i in range(len(network_objects)):
 				if algorithms[i] == 'louvain_res':
-					subsetiters = np.linspace(.25,.75,15)
+					subsetiters = np.linspace(.4,.8,16)
 				elif algorithms[i] == 'walktrap_n':
 					subsetiters = np.array([5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20])
 				else:
@@ -393,12 +401,19 @@ def plot_pc_similarity(network):
 			task_pc_matrix = np.zeros((len(plot_network_objects),len(plot_network_objects)))
 			for i in range(len(plot_network_objects)):
 				for j in range(len(plot_network_objects)):
-					task_pc_matrix[i,j] = scipy.stats.spearmanr(plot_network_objects[i].pc,plot_network_objects[j].pc)[0]
+					if measure == 'nmi': task_pc_matrix[i,j] = normalized_mutual_info_score(plot_network_objects[i].community.membership,plot_network_objects[j].community.membership)
+					else: task_pc_matrix[i,j] = scipy.stats.spearmanr(plot_network_objects[i].pc,plot_network_objects[j].pc)[0]
 			matrices.append(task_pc_matrix)
-			savestr = '/%s/diverse_club/figures/individual/pc_similarity_algorithms_f_c_elegans_%s.pdf'%(homedir,worm)
-			plot_pc_correlations(task_pc_matrix,labels,4,'functional c elegans, %s'%(worm.lower()),savestr)
-		savestr = '/%s/diverse_club/figures/pc_similarity_algorithms_f_c_elegans_mean.pdf'%(homedir)
-		plot_pc_correlations(np.nanmean(matrices,axis=0),labels,4,'functional c elegans, mean across worms',savestr)
+			savestr = '/%s/diverse_club/figures/individual/%s_similarity_algorithms_f_c_elegans_%s.pdf'%(homedir,measure,worm)
+			plot_pc_correlations(task_pc_matrix,labels,4,'functional c elegans, %s'%(worm.lower()),savestr,measure)
+			savestr = savestr.replace('figures/individual','results')
+			savestr = savestr.replace('pdf','npy')
+			np.save(savestr,task_pc_matrix)
+		savestr = '/%s/diverse_club/figures/%s_similarity_algorithms_f_c_elegans_mean.pdf'%(homedir,measure)
+		plot_pc_correlations(np.nanmean(matrices,axis=0),labels,4,'functional c elegans, mean across worms',savestr,measure)
+		savestr = savestr.replace('figures','results')
+		savestr = savestr.replace('pdf','npy')
+		np.save(savestr,np.nanmean(matrices,axis=0))
 	if network == 'structural_networks':
 		network_objects = []
 		matrices = []
@@ -425,11 +440,12 @@ def plot_pc_similarity(network):
 			pc_matrix = np.zeros((len(plot_network_objects),len(plot_network_objects)))
 			for i in range(len(plot_network_objects)):
 				for j in range(len(plot_network_objects)):
-					pc_matrix[i,j] = scipy.stats.spearmanr(plot_network_objects[i],plot_network_objects[j])[0]
-			savestr = '/%s/diverse_club/figures/pc_similarity_algorithms_sturctural_%s.pdf'%(homedir,structural_network)
+					if measure == 'nmi': task_pc_matrix[i,j] = normalized_mutual_info_score(plot_network_objects[i].community.membership,plot_network_objects[j].community.membership)
+					else: task_pc_matrix[i,j] = scipy.stats.spearmanr(plot_network_objects[i].pc,plot_network_objects[j].pc)[0]
+			savestr = '/%s/diverse_club/figures/%s_similarity_algorithms_sturctural_%s.pdf'%(homedir,measure,structural_network)
 			title = structural_network
-			# np.fill_diagonal(pc_matrix,0.0)
-			heatmap = sns.heatmap(pc_matrix,square=True,cmap = "RdBu_r",**{'vmin':-1,'vmax':1.0})
+			if measure == 'nmi': heatmap = sns.heatmap(pc_matrix,square=True,cmap = "RdBu_r",**{'vmin':0.0,'vmax':1.0})
+			else: heatmap = sns.heatmap(pc_matrix,square=True,cmap = "RdBu_r",**{'vmin':-1.0,'vmax':1.0})
 			heatmap.set_xticklabels(algorithms,rotation=90,fontsize=6)
 			heatmap.set_yticklabels(np.flip(algorithms,0),rotation=360,fontsize=6)
 			mean=np.nanmean(pc_matrix[pc_matrix!=1])
@@ -437,6 +453,9 @@ def plot_pc_similarity(network):
 			sns.plt.tight_layout()
 			sns.plt.savefig(savestr,dpi=600)
 			sns.plt.close()
+			savestr = savestr.replace('figures','results')
+			savestr = savestr.replace('pdf','npy')
+			np.save(savestr,task_pc_matrix)
 
 def plot_degree_distribution(network):
 	network_objects = []
@@ -563,7 +582,6 @@ def plot_structural_pc_distribution(network):
 				continue
 			pcs.append(nn.pc)
 			n_community_sizes.append(len(nn.community.sizes()))
-		n_community_sizes.append(n_community_sizes[-1])
 		n_community_sizes = np.flip(n_community_sizes,0)
 		
 		pcs = np.array(pcs)
@@ -744,6 +762,10 @@ def clubness(variables):
 	return np.array(pc_normalized_phis),np.array(degree_normalized_phis),np.array(pc_normalized_phis_std),np.array(degree_normalized_phis_std)
 
 def plot_clubness_by_club_value(network,algorithm):
+	colors = np.zeros((9,3))
+	colors[np.ix_([0,1])] = sns.cubehelix_palette(8)[-3],sns.cubehelix_palette(8)[3]
+	colors[np.ix_([2,3,4,5,6,7,8])] = np.array(sns.color_palette("cubehelix", 18))[-7:]
+
 	if network == 'human':
 		condition_name = 'task'
 		percent_cutoff = .95
@@ -753,33 +775,59 @@ def plot_clubness_by_club_value(network,algorithm):
 	if network == 'f_c_elegans':
 		condition_name = 'worm'
 		percent_cutoff = .95
-	df = load_object('/%s/diverse_club/results/%s_0.8_%s.obj'%(homedir,network,community_alg)).clubness
-	df[condition_name] = df[condition_name].str.lower()
-	df['percentile'] = np.nan
-	for c in np.unique(df[condition_name]):
-		df.percentile[df[condition_name] == c] = df[df[condition_name] == c]['rank'].rank(pct=True)
-	df = df[df.permute_strength==False]
-	df = df[df.randomize_topology==True]
-	nconditions = len(np.unique(df[condition_name]))
-	fig,subplots = sns.plt.subplots(nconditions/2,2,figsize=(mm_2_inches(183),mm_2_inches(61.75*np.ceil((nconditions)/2.))))
-	subplots = subplots.reshape(-1)
 
-	for sidx,diffnetwork in enumerate(np.unique(df[condition_name])):
-		temp_df = df[(df[condition_name]==diffnetwork)].copy()
-		temp_df = temp_df[temp_df.percentile<percent_cutoff]
-		dcorr = str(np.array(scipy.stats.spearmanr(temp_df.clubness[temp_df.club=='diverse'],temp_df.club_value[temp_df.club=='diverse']))[0])[1:4]
-		rcorr = str(np.array(scipy.stats.spearmanr(temp_df.clubness[temp_df.club=='rich'],temp_df.club_value[temp_df.club=='rich']))[0])[1:4]
-		subplots[sidx].scatter(temp_df.clubness[temp_df.club=='diverse'],temp_df.club_value[temp_df.club=='diverse'],color=sns.color_palette()[0],label='diverse club')
-		twin = subplots[sidx].twinx()
-		twin.scatter(temp_df.clubness[temp_df.club=='rich'],temp_df.club_value[temp_df.club=='rich'],color=sns.color_palette()[1],label='rich club')
-		patches = []
-		patches.append(mpl.patches.Patch(color=sns.color_palette()[0],label='diverse club (r=%s)'%(dcorr)))
-		patches.append(mpl.patches.Patch(color=sns.color_palette()[1],label='rich club (r=%s)'%(rcorr)))
-		subplots[sidx].legend(handles=patches,loc=4)
-		subplots[sidx].set_xlabel('clubness')
-		subplots[sidx].set_ylabel('participation coefficient')
-		twin.set_ylabel('strength')
+	nconditions = len(np.unique(df[condition_name]))
+	if network == 'f_c_elegans' or network == 'structural_networks': 
+		fig,subplots = sns.plt.subplots(9,4,figsize=(mm_2_inches(183),mm_2_inches(247)))
+	if network == 'human': 
+		fig,subplots = sns.plt.subplots(9,7,figsize=(mm_2_inches(183),mm_2_inches(247)))
+	subplots = subplots.reshape(-1)
+	sidx = 0
+	for algorithm in algorithms:
+		df = load_object('/%s/diverse_club/results/%s_0.8_%s.obj'%(homedir,network,algorithm)).clubness
+		df[condition_name] = df[condition_name].str.lower()
+		df['percentile'] = np.nan
+		for c in np.unique(df[condition_name]):
+			df.percentile[df[condition_name] == c] = df[df[condition_name] == c]['rank'].rank(pct=True)
+		df = df[df.permute_strength==False]
+		df = df[df.randomize_topology==True]
+		for diffnetwork in np.unique(df[condition_name]):
+			temp_df = df[(df[condition_name]==diffnetwork)].copy()
+			temp_df = temp_df[temp_df.percentile<percent_cutoff]
+			dcorr = str(np.array(scipy.stats.spearmanr(temp_df.clubness[temp_df.club=='diverse'],temp_df.club_value[temp_df.club=='diverse']))[0])[1:4]
+			rcorr = str(np.array(scipy.stats.spearmanr(temp_df.clubness[temp_df.club=='rich'],temp_df.club_value[temp_df.club=='rich']))[0])[1:4]
+			subplots[sidx].scatter(temp_df.clubness[temp_df.club=='diverse'],temp_df.club_value[temp_df.club=='diverse'],color=sns.color_palette()[0],alpha=.5)
+			subplots[sidx].get_yaxis().set_visible(False)
+			subplots[sidx].get_xaxis().set_visible(False)
+			twin = subplots[sidx].twinx()
+			twin.scatter(temp_df.clubness[temp_df.club=='rich'],temp_df.club_value[temp_df.club=='rich'],color=sns.color_palette()[1],alpha=.5)
+			patches = []
+			patches.append(mpl.patches.Patch(color=sns.color_palette()[0],label='diverse(r=%s)'%(dcorr)))
+			patches.append(mpl.patches.Patch(color=sns.color_palette()[1],label='rich(r=%s)'%(rcorr)))
+			if float(sidx)/float(nconditions) == int(sidx/nconditions): 
+				l = algorithm_names[np.where(algorithms==algorithm)[0][0]].replace(' ','\n')
+				subplots[sidx].set_ylabel(l)
+				subplots[sidx].set_yticklabels('')
+				subplots[sidx].get_yaxis().set_visible(True)
+			leg = twin.legend(handles=patches,loc=4,fontsize='xx-small',markerscale=.2,handlelength=0)
+			for legend_idx,text in enumerate(leg.get_texts()):
+				sns.plt.setp(text, color = sns.color_palette()[legend_idx])
+			for item in leg.legendHandles:
+				item.set_visible(False)
+			if sidx < nconditions:
+				subplots[sidx].set_title(np.unique(df[condition_name])[sidx])
+			subplots[sidx].get_xaxis().set_visible(False)
+			twin.get_yaxis().set_visible(False)
+			twin.get_xaxis().set_visible(False)
+			for spine in subplots[sidx].spines.values():
+				spine.set_edgecolor(colors[np.where(algorithms==algorithm)[0][0]])
+			for spine in twin.spines.values():
+				spine.set_edgecolor(colors[np.where(algorithms==algorithm)[0][0]])
+			sidx += 1
+	fig.text(0.0, 0.5, 'participation coefficient and strength for cutoff of club', va='center', rotation='vertical')
+	fig.text(.5, 0.00, 'clubness', va='bottom', rotation='horizontal')
 	sns.plt.tight_layout()
+	sns.plt.savefig('/%s/diverse_club/figures/values_by_clubness_%s.pdf'%(homedir,network))
 	sns.plt.show()
 
 class Network:
@@ -1055,7 +1103,7 @@ def plot_all_betweenness(network,measure='betweenness'):
 	ax.spines['bottom'].set_color('white')
 	sns.despine()
 	sns.plt.tight_layout()
-	sns.plt.savefig('%s/diverse_club/figures/%s_all_%s.pdf'%(homedir,network,measure))
+	sns.plt.savefig('%s/diverse_club/figures/all_%s_%s.pdf'%(homedir,measure,network))
 	sns.plt.close()
 
 def plot_all_clubness(network,std=False,randomize_topology=True,permute_strength=False):
@@ -1117,11 +1165,11 @@ def plot_all_clubness(network,std=False,randomize_topology=True,permute_strength
 		temp_df = temp_df[(temp_df['community algorithm']!='walktrap_n')&(temp_df['community algorithm']!='louvain_res')]
 		ax2 = sns.tsplot(data=temp_df,condition='community algorithm',unit='cost',time='percentile',value=value,color=diverse_colors,ax=subplots[sidx])
 		
-		# if network != 'structural_networks': 
-		# 	rich_df = df[(df[condition_name]==diffnetwork)&(df.club=='rich')].copy()
-		# 	rich_df = rich_df[(rich_df['community algorithm']=='walktrap_n')]
-		# 	rich_df['community algorithm'] = 'degree, full matrix'
-		# 	ax = sns.tsplot(data=rich_df,condition='community algorithm',unit='cost',time='percentile',value=value,color=sns.light_palette("green")[4],ax=subplots[sidx])
+		if network != 'structural_networks': 
+			rich_df = df[(df[condition_name]==diffnetwork)&(df.club=='rich')].copy()
+			rich_df = rich_df[(rich_df['community algorithm']=='walktrap_n')]
+			rich_df['community algorithm'] = 'degree, full matrix'
+			ax = sns.tsplot(data=rich_df,condition='community algorithm',unit='cost',time='percentile',value=value,color=sns.light_palette("green")[4],ax=subplots[sidx])
 
 		rich_df = df[(df[condition_name]==diffnetwork)&(df.club=='rich')&(df['community algorithm']=='infomap')].copy()
 		rich_df['percentile'] = rich_df['rank'].rank(pct=True)
@@ -1146,8 +1194,6 @@ def plot_all_clubness(network,std=False,randomize_topology=True,permute_strength
 		ax2.xaxis.set_major_locator(mpl.ticker.MultipleLocator(.15))
 		ax2.yaxis.set_major_locator(mpl.ticker.MultipleLocator(1))
 		ax2.legend_.remove()
-	# sns.plt.show()
-
 	if len(subplots) - nconditions == 2:
 		for ax in subplots[-2:]:
 			ax.get_xaxis().set_visible(False)
@@ -1176,9 +1222,7 @@ def plot_all_clubness(network,std=False,randomize_topology=True,permute_strength
 	ax.legend(handles=patches,loc=10)
 	sns.despine()
 	sns.plt.tight_layout()
-	sns.plt.show()
-	sns.plt.savefig('%s/diverse_club/figures/%s_all_clubness.pdf'%(homedir,network))
-	# sns.plt.show()
+	sns.plt.savefig('%s/diverse_club/figures/all_clubness_%s_rt_%s_ps_%s_std_%s.pdf'%(homedir,network,randomize_topology,permute_strength,std))
 	sns.plt.close()
 
 def plot_all_attacks(network):
@@ -1200,8 +1244,8 @@ def plot_all_attacks(network):
 		df = df.append(temp_df)
 	# z-score everything
 	for condition in np.unique(df[condition_name]):
-		df.loc['sum of shortest paths'][(df['attack'] == 'diverse') & (df['condition']==condition)] = df['sum of shortest paths'][(df['attack'] == 'diverse') & (df['condition']==condition)] / np.nanmean(df['sum of shortest paths'][(df['attack'] == 'none') & (df['condition']==condition)])
-		df.loc['sum of shortest paths'][(df['attack'] == 'rich') & (df['condition']==condition)] = df['sum of shortest paths'][(df['attack'] == 'rich') & (df['condition']==condition)] / np.nanmean(df['sum of shortest paths'][(df['attack'] == 'none') & (df['condition']==condition)])
+		df['sum of shortest paths'][(df['attack'] == 'diverse') & (df['condition']==condition)] = df['sum of shortest paths'][(df['attack'] == 'diverse') & (df['condition']==condition)] / np.nanmean(df['sum of shortest paths'][(df['attack'] == 'none') & (df['condition']==condition)])
+		df['sum of shortest paths'][(df['attack'] == 'rich') & (df['condition']==condition)] = df['sum of shortest paths'][(df['attack'] == 'rich') & (df['condition']==condition)] / np.nanmean(df['sum of shortest paths'][(df['attack'] == 'none') & (df['condition']==condition)])
 	df = df[df.attack != 'none']
 	df.rename(columns={'sum of shortest paths': 'sum of shortest paths increase'},inplace=True)
 	df[condition_name] =  df[condition_name].str.lower()
@@ -1301,7 +1345,7 @@ def plot_all_intersect(network):
 	ax1 = sns.barplot(y='condition', x='difference, percentage of communities with a diverse club node minus percentage of communities with a rich club node', hue='community algorithm', palette=colors,data=final_df,orient="h",ax=subplots[1])
 	ax1.legend_.remove()
 	ax1.set_xlabel('difference, percentage of communities with a diverse club node\nminus percentage of communities with a rich club node')
-	sns.plt.savefig('/%s/diverse_club/figures/%s_all_intersect.pdf'%(homedir,network))
+	sns.plt.savefig('/%s/diverse_club/figures/all_intersect_%s.pdf'%(homedir,network))
 
 def plot_matrices(n,filter_name,savestr):
 	to_plot = []
@@ -1393,7 +1437,7 @@ def plot_edge_betweenness(n,savestr):
 	# sns.plt.show()
 	sns.plt.close()
 
-def plot_clubness(n,std,savestr):
+def plot_clubness(n,std,randomize_topology,permute_strength,savestr):
 	if std == True: value = 'clubness_std'
 	else: value = 'clubness'
 	sns.set(context="paper",font='Helvetica',style='white')
@@ -1408,7 +1452,7 @@ def plot_clubness(n,std,savestr):
 		ax = sns.tsplot(data=df,condition='club',color={'diverse':sns.color_palette()[0],'rich':sns.color_palette()[1]},unit=n.subsets[1],time='percentile',value=value,ax=subplots[idx])
 		ax.set_title(diffnetwork.lower(),fontdict={'fontsize':'large'})
 		len(ax.lines[1].get_data()[1])
-		xcutoff = int(len(ax.lines[1].get_data()[1])*.95)
+		xcutoff = int(len(ax.lines[1].get_data()[1])*.90)
 
 		ax.set_xlim(0,xcutoff)
 		# labels = [item.get_text() for item in ax.get_xticklabels()]
@@ -1423,7 +1467,7 @@ def plot_clubness(n,std,savestr):
 	sns.despine()
 	sns.plt.tight_layout()
 	sns.plt.savefig(savestr)
-	# sns.plt.show()
+	sns.plt.show()
 	sns.plt.close()
 
 def plot_intersect(n,savestr):
@@ -1485,7 +1529,7 @@ def partition_network(variables):
 		elif community_alg == 'walktrap_n':
 			graph = brain_graphs.matrix_to_igraph(matrix.copy(),cost=1,mst=True)
 		elif community_alg == 'random':
-			graph = brain_graphs.matrix_to_igraph(matrix.copy(),cost=.1,mst=True)
+			graph = brain_graphs.matrix_to_igraph(matrix.copy(),cost=np.random.randint(5,21,1)[0]*0.01,mst=True)
 		else:
 			graph = brain_graphs.matrix_to_igraph(matrix.copy(),cost=cost,mst=True)
 	elif make_graph == False:
@@ -1514,7 +1558,11 @@ def partition_network(variables):
 			louvain_vc = louvain.best_partition(nxg,resolution=cost)
 			vc = brain_graphs.brain_graph(VertexClustering(graph,louvain_vc.values()))
 		if community_alg == 'random':
-			vc = brain_graphs.brain_graph(VertexClustering(graph,np.random.randint(0,16,graph.vcount())))
+			np.random.seed(cost)
+			temp_vc = graph.community_infomap(edge_weights='weight')
+			membership = np.array(temp_vc.membership)
+			np.random.shuffle(membership)
+			vc = brain_graphs.brain_graph(VertexClustering(graph,membership))
 		if len(vc.community.sizes()) > 1:
 			break
 	return vc
@@ -1528,9 +1576,9 @@ def make_networks(network,rankcut,community_alg):
 			if community_alg == 'louvain_res':
 				subsets = ['task','resolution']
 				subsetiters = np.linspace(.4,.8,16)
-			if community_alg == 'random':
+			elif community_alg == 'random':
 				subsets = ['task','random_iteration']
-				subsetiters = np.arange(0,100)
+				subsetiters = np.arange(0,1000)
 			elif community_alg == 'walktrap_n':
 				subsets = ['task','n_clusters']
 				subsetiters = np.array([5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20])
@@ -1556,6 +1604,9 @@ def make_networks(network,rankcut,community_alg):
 			if community_alg == 'louvain_res':
 				subsets = ['worm','resolution']
 				subsetiters = np.linspace(.4,.8,16)
+			elif community_alg == 'random':
+				subsets = ['worm','random_iteration']
+				subsetiters = np.arange(0,1000)
 			elif community_alg == 'walktrap_n':
 				subsets = ['worm','n_clusters']
 				subsetiters = np.array([5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20])
@@ -1585,6 +1636,9 @@ def make_networks(network,rankcut,community_alg):
 			elif community_alg == 'walktrap_n':
 				subsets = ['network','n_clusters']
 				subsetiters = np.array([5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20])
+			elif community_alg == 'random':
+				subsets = ['network','random_iteration']
+				subsetiters = np.arange(0,1000)
 			else:
 				subsets = ['network','cost']
 				subsetiters = [1]
@@ -1605,39 +1659,31 @@ def make_networks(network,rankcut,community_alg):
 
 def run_networks(network,run=False,nrandomiters=1000,rankcut=.8,community_alg='infomap',plot_it=False):
 	# network='f_c_elegans'
-	# run=False
-	# nrandomiters=100
+	# run=True
+	# nrandomiters=50
 	# rankcut=.8
-	# community_alg='walktrap_n'
-	# randomize_topology=True
-	# permute_strength=False
-	# plot_it=True
+	# community_alg='random'
+	# plot_it=False
 
-	if run == False: 
-		n = load_object('/%s/diverse_club/results/%s_%s_%s.obj'%(homedir,network,rankcut,community_alg))
+	if run == False: n = load_object('/%s/diverse_club/results/%s_%s_%s.obj'%(homedir,network,rankcut,community_alg))
 	else:
-		if network == 'human':
-			n = make_networks(network,rankcut,community_alg)
-		if network == 'f_c_elegans':
-			n = make_networks(network,rankcut,community_alg)
-		if network == 'human' or network == 'f_c_elegans':
-			if community_alg == 'louvain_res' or community_alg == 'walktrap_n':
-				n.attack(None,100,10)
-			else:
-				n.attack('0.2',1000,10)
-		if network == 'structural_networks':
-			n = make_networks(network,rankcut,community_alg)
-			if community_alg == 'louvain_res' or community_alg == 'walktrap_n':
-				n.attack(None,100,10)
-			else:
-				n.attack(None,1000,10)
-		sys.stdout.flush()
+		n = make_networks(network,rankcut,community_alg)
 		n.calculate_clubness(niters=nrandomiters,randomize_topology=True,permute_strength=False)
 		n.calculate_clubness(niters=nrandomiters,randomize_topology=True,permute_strength=True)
-		n.calculate_intersect()
-		n.calculate_betweenness()
-		n.calculate_edge_betweenness()
 		save_object(n,'/%s/diverse_club/results/%s_%s_%s.obj'%(homedir,network,rankcut,community_alg))
+		if community_alg != 'random':
+			n.calculate_intersect()
+			n.calculate_betweenness()
+			n.calculate_edge_betweenness()
+			save_object(n,'/%s/diverse_club/results/%s_%s_%s.obj'%(homedir,network,rankcut,community_alg))
+			if network == 'human' or network == 'f_c_elegans':
+				if community_alg == 'louvain_res' or community_alg == 'walktrap_n': n.attack(None,100,10)
+				else: n.attack('0.2',1000,10)
+			if network == 'structural_networks':
+				if community_alg == 'louvain_res' or community_alg == 'walktrap_n': n.attack(None,100,10)
+				else: n.attack(None,1000,10)
+			sys.stdout.flush()
+			save_object(n,'/%s/diverse_club/results/%s_%s_%s.obj'%(homedir,network,rankcut,community_alg))
 	if plot_it == True:
 		if community_alg == 'louvain_res': filter_name = '0.5'
 		elif community_alg == 'walktrap_n': filter_name = '12'
@@ -1864,6 +1910,7 @@ def generative_model(n_nodes=100,iters=100,cores=40,all_shortest='all',q_ratio=.
 
 def submit_2_sge(network='human',cores=20):
 	for algorithm in algorithms:
+		if algorithm != 'random':continue
 		if algorithm == 'walktrap_n' or algorithm == 'louvain_res':
 			command = 'qsub -pe threaded %s -V -l mem_free=4G -j y -o /%s/diverse_club/sge/ -e /%s/diverse_club/sge/ -N %s diverse_club.py run %s %s ' \
 			%(cores,homedir,homedir,network[0] + '_' + algorithm,network,algorithm)
@@ -1874,25 +1921,21 @@ def submit_2_sge(network='human',cores=20):
 			os.system(command)
 
 # networks = ['f_c_elegans','human','structural_networks']
-# for network in networks[:1]
-	# print network
-	# plot_all_intersect(network)
+# for network in networks[1:]:
+	# plot_community_stats(network,measure='sizes')
+	# plot_community_stats(network,measure='q')
+	# plot_similarity(network,measure='nmi')
+	# plot_similarity(network,measure='pc')
 	# plot_all_attacks(network)
-	# plot_all_clubness(network)
-	# plot_all_betweenness(network,measure='betweenness')
-	# plot_all_betweenness(network,measure='edge betweenness')
-
-	# plot_community_stats('f_c_elegans',measure='q')
-	# plot_degree_distribution(network)
-	# n = make_networks(network,0.8,'infomap')
-	# for nn in n.networks:
-	# 	check_network(nn)
-	# plot_distribution(network,measure='degree')
-	# plot_distribution(network,measure='pc')
+	# plot_all_intersect(network)
+	# plot_all_betweenness(network,'betweenness')
+	# plot_all_betweenness(network,'edge betweenness')
+	# plot_all_clubness(network,std=False,randomize_topology=True,permute_strength=False)
+	# plot_all_clubness(network,std=False,randomize_topology=True,permute_strength=True)
+	# plot_all_clubness(network,std=True,randomize_topology=True,permute_strength=False)
+	# plot_all_clubness(network,std=True,randomize_topology=True,permute_strength=True)
 
 if len(sys.argv) > 1:
-	cores = 40
+	cores = 20
 	if sys.argv[1] == 'run':
 		run_networks(sys.argv[2],run=True,nrandomiters=1000,rankcut=.8,community_alg=sys.argv[3])
-
-# random community assingment
