@@ -55,8 +55,48 @@ global algorithm_names
 global cores
 cores = 2
 algorithm_names = np.array(['infomap','walktrap','spectral','edge betweenness','label propogation','louvain','spin glass','walktrap (n)','louvain (resolution)'])
-algorithms = np.array(['infomap','walktrap','spectral','edge_betweenness','label_propogation','louvain','spin_glass','walktrap_n','louvain_res','random'])
+algorithms = np.array(['infomap','walktrap','spectral','edge_betweenness','label_propogation','louvain','spin_glass','walktrap_n','louvain_res'])
 order = np.array(['infomap','walktrap','spectral','edge_betweenness','label_propogation','louvain','spin_glass','rich club, thresholded','rich club, dense','walktrap_n','louvain_res'])
+
+
+def participation_coef(W, ci, degree='undirected'):
+    '''
+    Participation coefficient is a measure of diversity of intermodular
+    connections of individual nodes.
+    Parameters
+    ----------
+    W : NxN np.ndarray
+        binary/weighted directed/undirected connection matrix
+    ci : Nx1 np.ndarray
+        community affiliation vector
+    degree : str
+        Flag to describe nature of graph 'undirected': For undirected graphs
+                                         'in': Uses the in-degree
+                                         'out': Uses the out-degree
+    Returns
+    -------
+    P : Nx1 np.ndarray
+        participation coefficient
+    '''
+    if degree == 'in':
+        W = W.T
+
+    _, ci = np.unique(ci, return_inverse=True)
+    ci += 1
+
+    n = len(W)  # number of vertices
+    Ko = np.sum(W, axis=1)  # (out) degree
+    Gc = np.dot((W != 0), np.diag(ci))  # neighbor community affiliation
+    Kc2 = np.zeros((n,))  # community-specific neighbors
+
+    for i in range(1, int(np.max(ci)) + 1):
+        Kc2 += np.square(np.sum(W * (Gc == i), axis=1))
+
+    P = np.ones((n,)) - Kc2 / np.square(Ko)
+    # P=0 if for nodes with no (out) neighbors
+    P[np.where(np.logical_not(Ko))] = 0
+
+    return P
 
 def corrfunc(x, y, **kws):
 	r, _ = pearsonr(x, y)
@@ -255,6 +295,48 @@ def check_network(network):
 	assert np.min(network.community.graph.degree()) > 0
 	assert np.isnan(network.community.graph.degree()).any() == False
 	assert np.nanmax(np.array(network.pc)) < 1.
+	assert np.isclose(network.pc,participation_coef(network.matrix,network.community.membership)).all() == True
+
+def random_test(network,rankcut):
+	nr = load_object('/%s/diverse_club/results/%s_%s_%s.obj'%(homedir,network,rankcut,'random'))
+	n = load_object('/%s/diverse_club/results/%s_%s_%s.obj'%(homedir,network,.8,'infomap'))     
+	rs = []
+	for i in range(1000):
+		rs.append(pearsonr(nr.networks[i].pc,nr.networks[i].wmd)[0])
+	print 'random_pc & random wmd ' + str(np.mean(rs))
+
+	rs = []
+	for i in range(len(n.networks)):
+		rs.append(pearsonr(n.networks[i].pc,n.networks[i].wmd)[0])
+	print 'real_pc and real wmd ' + str(np.mean(rs))
+
+	rs = []
+	for i in range(1000):
+		rs.append(pearsonr(nr.networks[i].pc,nr.networks[i].community.graph.strength(weights='weight'))[0])
+	print 'random_pc & real degree ' + str(np.mean(rs))
+
+	rs = []
+	for i in range(len(n.networks)):
+		rs.append(pearsonr(n.networks[i].pc,n.networks[i].community.graph.strength(weights='weight'))[0])
+	print 'real_pc and real degree ' + str(np.mean(rs))
+
+	rs = []
+	for i in range(1000):
+		a = n.networks[int(nr.networks[i].community.graph.density()*100)-5].pc.copy()
+		b = nr.networks[i].pc.copy()
+		a[a ==0.0] = np.nan
+		b[b ==0.0] = np.nan
+		rs.append(nan_pearsonr(a,b)[0])
+	print 'real_pc and random pc ' + str(np.mean(rs))
+
+	rs = []
+	for i in range(1,999):
+		a = nr.networks[0].pc.copy()
+		if int(nr.networks[i].community.graph.density()*100) == 19:
+			b = nr.networks[i].pc.copy()
+			a[a ==0.0] = np.nan
+			b[b ==0.0] = np.nan
+			rs.append(nan_pearsonr(a,b)[0])
 
 def plot_community_stats(network,measure='sizes'):
 	network_objects = []
@@ -1022,7 +1104,7 @@ def plot_all_betweenness(network,measure='betweenness'):
 	colors = np.zeros((11,3))
 	colors[np.ix_([0,1])] = sns.cubehelix_palette(8)[-3],sns.cubehelix_palette(8)[3]
 	colors[np.ix_([2,3,4,5,6,8,9])] = np.array(sns.color_palette("cubehelix", 18))[-7:]
-	colors[np.ix_([7,10])] = sns.light_palette("green")[5][:3],sns.light_palette("green")[4][:3]
+	colors[np.ix_([7,10])] = sns.light_palette("green")[2][:3],sns.light_palette("green")[5][:3]
 	colors = colors[:-2]
 
 	if network == 'human':
@@ -1036,7 +1118,7 @@ def plot_all_betweenness(network,measure='betweenness'):
 		percent_cutoff = .9
 	df = pd.DataFrame()
 	for community_alg in algorithms[:-2]:
-		temp_df = load_object('/%s/diverse_club/results/%s_0.8_%s_True_False.obj'%(homedir,network,community_alg))
+		temp_df = load_object('/%s/diverse_club/results/%s_0.8_%s.obj'%(homedir,network,community_alg))
 		if measure == 'edge betweenness': 
 			temp_df = temp_df.edge_betweenness
 			temp_df.rename(columns={'edge_betweenness': 'edge betweenness'},inplace=True)
@@ -1121,11 +1203,11 @@ def plot_all_clubness(network,std=False,randomize_topology=True,permute_strength
 	colors = np.zeros((11,3))
 	colors[np.ix_([0,1])] = sns.cubehelix_palette(8)[-3],sns.cubehelix_palette(8)[3]
 	colors[np.ix_([2,3,4,5,6,7,8])] = np.array(sns.color_palette("cubehelix", 18))[-7:]
-	colors[10] = sns.light_palette("green")[4][:3]
-	colors[9] = sns.light_palette("green")[5][:3]
+	colors[10] = sns.light_palette("green")[5][:3]
+	colors[9] = sns.light_palette("green")[2][:3]
 
 	df = pd.DataFrame()
-	for community_alg in algorithms:
+	for community_alg in algorithms[:-1]:
 		temp_df = load_object('/%s/diverse_club/results/%s_0.8_%s.obj'%(homedir,network,community_alg))
 		temp_df = temp_df.clubness
 		temp_df['community algorithm'] = community_alg
@@ -1142,6 +1224,7 @@ def plot_all_clubness(network,std=False,randomize_topology=True,permute_strength
 	sns.set(context="paper",font='Helvetica',style='white')
 	df[condition_name] =  df[condition_name].str.lower()
 	nconditions = len(np.unique(df[condition_name]))
+
 	if nconditions/2 == nconditions/2.:
 		fig,subplots = sns.plt.subplots(int(np.ceil((nconditions+1)/2.)),2,figsize=(mm_2_inches(183),mm_2_inches(61.75*np.ceil((nconditions+1)/2.))))
 		subplots = subplots.reshape(-1)	
@@ -1169,12 +1252,12 @@ def plot_all_clubness(network,std=False,randomize_topology=True,permute_strength
 			rich_df = df[(df[condition_name]==diffnetwork)&(df.club=='rich')].copy()
 			rich_df = rich_df[(rich_df['community algorithm']=='walktrap_n')]
 			rich_df['community algorithm'] = 'degree, full matrix'
-			ax = sns.tsplot(data=rich_df,condition='community algorithm',unit='cost',time='percentile',value=value,color=sns.light_palette("green")[4],ax=subplots[sidx])
+			ax = sns.tsplot(data=rich_df,condition='community algorithm',unit='cost',time='percentile',value=value,color=sns.light_palette("green")[5],ax=subplots[sidx])
 
 		rich_df = df[(df[condition_name]==diffnetwork)&(df.club=='rich')&(df['community algorithm']=='infomap')].copy()
 		rich_df['percentile'] = rich_df['rank'].rank(pct=True)
 		rich_df['community algorithm'] = 'degree, thresholded'
-		ax1 = sns.tsplot(data=rich_df,condition='community algorithm',unit='cost',time='percentile',value=value,color=sns.light_palette("green")[5],ax=subplots[sidx])
+		ax1 = sns.tsplot(data=rich_df,condition='community algorithm',unit='cost',time='percentile',value=value,color=sns.light_palette("green")[2],ax=subplots[sidx])
 		ax1.xaxis.set_major_locator(mpl.ticker.MultipleLocator(.10))
 		
 		ax2.set_xlabel('percentile cut off for the club')
@@ -1230,7 +1313,7 @@ def plot_all_attacks(network):
 	colors = np.zeros((11,3))
 	colors[np.ix_([0,1])] = sns.cubehelix_palette(8)[-3],sns.cubehelix_palette(8)[3]
 	colors[np.ix_([2,3,4,5,6,8,9])] = np.array(sns.color_palette("cubehelix", 18))[-7:]
-	colors[np.ix_([7,10])] = sns.light_palette("green")[5][:3],sns.light_palette("green")[4][:3]
+	colors[np.ix_([7,10])] = sns.light_palette("green")[2][:3],sns.light_palette("green")[5][:3]
 	colors = colors[:-2]
 	if network == 'human': condition_name = 'condition'
 	if network == 'structural_networks': condition_name = 'condition'	
@@ -1318,7 +1401,7 @@ def plot_all_intersect(network):
 	colors[np.ix_([2,3,4,5,6,7,8])] = np.array(sns.color_palette("cubehelix", 18))[-7:]
 	df = pd.DataFrame()
 	for community_alg in algorithms:
-		temp_df = load_object('/%s/diverse_club/results/%s_0.8_%s_True_False.obj'%(homedir,network,community_alg))
+		temp_df = load_object('/%s/diverse_club/results/%s_0.8_%s.obj'%(homedir,network,community_alg))
 		temp_df = temp_df.intersect
 		if community_alg == 'walktrap_n': community_alg = 'walktrap (n)'
 		if community_alg == 'louvain_res': community_alg = 'louvain (resolution)'
@@ -1528,15 +1611,13 @@ def partition_network(variables):
 			nxg = igraph_2_networkx(graph)
 		elif community_alg == 'walktrap_n':
 			graph = brain_graphs.matrix_to_igraph(matrix.copy(),cost=1,mst=True)
-		elif community_alg == 'random':
-			graph = brain_graphs.matrix_to_igraph(matrix.copy(),cost=np.random.randint(5,21,1)[0]*0.01,mst=True)
 		else:
 			graph = brain_graphs.matrix_to_igraph(matrix.copy(),cost=cost,mst=True)
 	elif make_graph == False:
 		graph = matrix
 		if community_alg[:7] == 'louvain':
 			nxg = igraph_2_networkx(graph)
-	while True:
+	while True: #sometimes dense matrices give you one community, which makes calculating PC impossible
 		if community_alg == 'walktrap_n':
 			vc = brain_graphs.brain_graph(graph.community_walktrap(weights='weight').as_clustering(cost))
 		if community_alg == 'infomap':
@@ -1557,28 +1638,17 @@ def partition_network(variables):
 		if community_alg == 'louvain_res':		
 			louvain_vc = louvain.best_partition(nxg,resolution=cost)
 			vc = brain_graphs.brain_graph(VertexClustering(graph,louvain_vc.values()))
-		if community_alg == 'random':
-			np.random.seed(cost)
-			temp_vc = graph.community_infomap(edge_weights='weight')
-			membership = np.array(temp_vc.membership)
-			np.random.shuffle(membership)
-			vc = brain_graphs.brain_graph(VertexClustering(graph,membership))
 		if len(vc.community.sizes()) > 1:
 			break
 	return vc
 
 def make_networks(network,rankcut,community_alg):
 	if network == 'human':
-		try:
-			1/0
-			n = load_object('/%s/diverse_club/graphs/graph_objects/%s_%s_%s.obj'%(homedir,network,rankcut,community_alg))
+		try: n = load_object('/%s/diverse_club/graphs/graph_objects/%s_%s_%s.obj'%(homedir,network,rankcut,community_alg))
 		except:
 			if community_alg == 'louvain_res':
 				subsets = ['task','resolution']
 				subsetiters = np.linspace(.4,.8,16)
-			elif community_alg == 'random':
-				subsets = ['task','random_iteration']
-				subsetiters = np.arange(0,1000)
 			elif community_alg == 'walktrap_n':
 				subsets = ['task','n_clusters']
 				subsetiters = np.array([5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20])
@@ -1597,16 +1667,11 @@ def make_networks(network,rankcut,community_alg):
 			n = Network(networks,rankcut,names,subsets,community_alg)
 			save_object(n,'/%s/diverse_club/graphs/graph_objects/%s_%s_%s.obj'%(homedir,network,rankcut,community_alg))
 	if network == 'f_c_elegans':
-		try:
-			1/0
-			n = load_object('/%s/diverse_club/graphs/graph_objects/%s_%s_%s.obj'%(homedir,network,rankcut,community_alg))
+		try: n = load_object('/%s/diverse_club/graphs/graph_objects/%s_%s_%s.obj'%(homedir,network,rankcut,community_alg))
 		except:	
 			if community_alg == 'louvain_res':
 				subsets = ['worm','resolution']
 				subsetiters = np.linspace(.4,.8,16)
-			elif community_alg == 'random':
-				subsets = ['worm','random_iteration']
-				subsetiters = np.arange(0,1000)
 			elif community_alg == 'walktrap_n':
 				subsets = ['worm','n_clusters']
 				subsetiters = np.array([5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20])
@@ -1627,7 +1692,7 @@ def make_networks(network,rankcut,community_alg):
 			save_object(n,'/%s/diverse_club/graphs/graph_objects/%s_%s_%s.obj'%(homedir,network,rankcut,community_alg))	
 	if network == 'structural_networks':
 		try:
-			1/0
+			1/0 
 			n = load_object('/%s/diverse_club/graphs/graph_objects/%s_%s_%s.obj'%(homedir,network,rankcut,community_alg))
 		except:
 			if community_alg == 'louvain_res':
@@ -1636,9 +1701,6 @@ def make_networks(network,rankcut,community_alg):
 			elif community_alg == 'walktrap_n':
 				subsets = ['network','n_clusters']
 				subsetiters = np.array([5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20])
-			elif community_alg == 'random':
-				subsets = ['network','random_iteration']
-				subsetiters = np.arange(0,1000)
 			else:
 				subsets = ['network','cost']
 				subsetiters = [1]
@@ -1671,19 +1733,18 @@ def run_networks(network,run=False,nrandomiters=1000,rankcut=.8,community_alg='i
 		n.calculate_clubness(niters=nrandomiters,randomize_topology=True,permute_strength=False)
 		n.calculate_clubness(niters=nrandomiters,randomize_topology=True,permute_strength=True)
 		save_object(n,'/%s/diverse_club/results/%s_%s_%s.obj'%(homedir,network,rankcut,community_alg))
-		if community_alg != 'random':
-			n.calculate_intersect()
-			n.calculate_betweenness()
-			n.calculate_edge_betweenness()
-			save_object(n,'/%s/diverse_club/results/%s_%s_%s.obj'%(homedir,network,rankcut,community_alg))
-			if network == 'human' or network == 'f_c_elegans':
-				if community_alg == 'louvain_res' or community_alg == 'walktrap_n': n.attack(None,100,10)
-				else: n.attack('0.2',1000,10)
-			if network == 'structural_networks':
-				if community_alg == 'louvain_res' or community_alg == 'walktrap_n': n.attack(None,100,10)
-				else: n.attack(None,1000,10)
-			sys.stdout.flush()
-			save_object(n,'/%s/diverse_club/results/%s_%s_%s.obj'%(homedir,network,rankcut,community_alg))
+		n.calculate_intersect()
+		n.calculate_betweenness()
+		n.calculate_edge_betweenness()
+		save_object(n,'/%s/diverse_club/results/%s_%s_%s.obj'%(homedir,network,rankcut,community_alg))
+		if network == 'human' or network == 'f_c_elegans':
+			if community_alg == 'louvain_res' or community_alg == 'walktrap_n': n.attack(None,100,10)
+			else: n.attack('0.2',1000,10)
+		if network == 'structural_networks':
+			if community_alg == 'louvain_res' or community_alg == 'walktrap_n': n.attack(None,100,10)
+			else: n.attack(None,1000,10)
+		sys.stdout.flush()
+		save_object(n,'/%s/diverse_club/results/%s_%s_%s.obj'%(homedir,network,rankcut,community_alg))
 	if plot_it == True:
 		if community_alg == 'louvain_res': filter_name = '0.5'
 		elif community_alg == 'walktrap_n': filter_name = '12'
@@ -1910,32 +1971,40 @@ def generative_model(n_nodes=100,iters=100,cores=40,all_shortest='all',q_ratio=.
 
 def submit_2_sge(network='human',cores=20):
 	for algorithm in algorithms:
-		if algorithm != 'random':continue
-		if algorithm == 'walktrap_n' or algorithm == 'louvain_res':
-			command = 'qsub -pe threaded %s -V -l mem_free=4G -j y -o /%s/diverse_club/sge/ -e /%s/diverse_club/sge/ -N %s diverse_club.py run %s %s ' \
-			%(cores,homedir,homedir,network[0] + '_' + algorithm,network,algorithm)
+		if algorithm != 'infomap': continue
+		if algorithm == 'walktrap_n' or algorithm == 'louvain_res' or algorithm == 'random':
+			command = 'qsub -pe threaded %s -binding linear:%s -V -l mem_free=10G -j y -o /%s/diverse_club/sge/ -e /%s/diverse_club/sge/ -N %s diverse_club.py run %s %s ' \
+			%(cores,cores,homedir,homedir,network[0] + '_' + algorithm,network,algorithm)
 			os.system(command)
 		else:
-			command = 'qsub -pe threaded %s -V -l mem_free=1G -j y -o /%s/diverse_club/sge/ -e /%s/diverse_club/sge/ -N %s diverse_club.py run %s %s ' \
-			%(cores,homedir,homedir,network[0] + '_' + algorithm,network,algorithm)
+			command = 'qsub -pe threaded %s -binding linear:%s -V -l mem_free=5G -j y -o /%s/diverse_club/sge/ -e /%s/diverse_club/sge/ -N %s diverse_club.py run %s %s ' \
+			%(cores,cores,homedir,homedir,network[0] + '_' + algorithm,network,algorithm)
 			os.system(command)
 
-# networks = ['f_c_elegans','human','structural_networks']
-# for network in networks[1:]:
-	# plot_community_stats(network,measure='sizes')
-	# plot_community_stats(network,measure='q')
-	# plot_similarity(network,measure='nmi')
-	# plot_similarity(network,measure='pc')
-	# plot_all_attacks(network)
-	# plot_all_intersect(network)
-	# plot_all_betweenness(network,'betweenness')
-	# plot_all_betweenness(network,'edge betweenness')
-	# plot_all_clubness(network,std=False,randomize_topology=True,permute_strength=False)
-	# plot_all_clubness(network,std=False,randomize_topology=True,permute_strength=True)
-	# plot_all_clubness(network,std=True,randomize_topology=True,permute_strength=False)
-	# plot_all_clubness(network,std=True,randomize_topology=True,permute_strength=True)
+def check_all_networks(alg='infomap'):
+	networks = ['f_c_elegans','human','structural_networks']
+	for network in networks:
+		print network
+		n = load_object('/%s/diverse_club/results/%s_%s_%s.obj'%(homedir,network,.8,alg))
+		for idx,nn in enumerate(n.networks):
+			print n.names[idx]
+			check_network(nn)
 
 if len(sys.argv) > 1:
 	cores = 20
 	if sys.argv[1] == 'run':
 		run_networks(sys.argv[2],run=True,nrandomiters=1000,rankcut=.8,community_alg=sys.argv[3])
+
+
+# plot_community_stats(network,measure='sizes')
+# plot_community_stats(network,measure='q')
+# plot_similarity(network,measure='nmi')
+# plot_similarity(network,measure='pc')
+# plot_all_attacks(network)
+# plot_all_intersect(network)
+# plot_all_betweenness(network,'betweenness')
+# plot_all_betweenness(network,'edge betweenness')
+# plot_all_clubness(network,std=False,randomize_topology=True,permute_strength=False)
+# plot_all_clubness(network,std=False,randomize_topology=True,permute_strength=True)
+# plot_all_clubness(network,std=True,randomize_topology=True,permute_strength=False)
+# plot_all_clubness(network,std=True,randomize_topology=True,permute_strength=True)
