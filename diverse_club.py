@@ -341,7 +341,7 @@ def random_test(network,rankcut):
 def plot_community_stats(network,measure='sizes'):
 	network_objects = []
 	for community_alg in algorithms:
-		network_objects.append(load_object('/%s/diverse_club/results/%s_0.8_%s_True_False.obj'%(homedir,network,community_alg)))
+		network_objects.append(load_object('/%s/diverse_club/results/%s_0.8_%s.obj'%(homedir,network,community_alg)))
 	if network == 'f_c_elegans':
 		iters = ['Worm1','Worm2','Worm3','Worm4']
 	if network == 'human':
@@ -421,7 +421,7 @@ def plot_similarity(network,measure='nmi'):
 	if network == 'human':
 		network_objects = []
 		for community_alg in algorithms:
-			network_objects.append(load_object('/%s/diverse_club/results/%s_0.8_%s_True_False.obj'%(homedir,network,community_alg)))
+			network_objects.append(load_object('/%s/diverse_club/results/%s_0.8_%s.obj'%(homedir,network,community_alg)))
 		matrices = []
 		for task in tasks:
 			labels = []
@@ -460,7 +460,7 @@ def plot_similarity(network,measure='nmi'):
 	if network == 'f_c_elegans':
 		network_objects = []
 		for community_alg in algorithms:
-			network_objects.append(load_object('/%s/diverse_club/results/%s_0.8_%s_True_False.obj'%(homedir,network,community_alg)))
+			network_objects.append(load_object('/%s/diverse_club/results/%s_0.8_%s.obj'%(homedir,network,community_alg)))
 		matrices = []
 		for worm in ['Worm1','Worm2','Worm3','Worm4']:
 			labels = []
@@ -541,8 +541,8 @@ def plot_similarity(network,measure='nmi'):
 
 def plot_degree_distribution(network):
 	network_objects = []
-	network_objects.append(load_object('/%s/diverse_club/results/%s_0.8_%s_True_False.obj'%(homedir,network,'infomap')))
-	network_objects.append(load_object('/%s/diverse_club/results/%s_0.8_%s_True_False.obj'%(homedir,network,'walktrap_n')))
+	network_objects.append(load_object('/%s/diverse_club/results/%s_0.8_%s.obj'%(homedir,network,'infomap')))
+	network_objects.append(load_object('/%s/diverse_club/results/%s_0.8_%s.obj'%(homedir,network,'walktrap_n')))
 	if network == 'f_c_elegans': iters = ['Worm1','Worm2','Worm3','Worm4']
 	if network == 'human': iters = tasks
 	if network == 'structural_networks': iters = ['c elegans','macaque','flight traffic','US power grid']
@@ -622,7 +622,7 @@ def plot_degree_distribution(network):
 
 def plot_structural_pc_distribution(network):
 	network_objects = []
-	for community_alg in algorithms: network_objects.append(load_object('/%s/diverse_club/results/structural_networks_0.8_%s_True_False.obj'%(homedir,community_alg)))
+	for community_alg in algorithms: network_objects.append(load_object('/%s/diverse_club/results/structural_networks_0.8_%s.obj'%(homedir,community_alg)))
 	iters = ['c elegans','macaque','flight traffic','US power grid']
 	sns.set_style("white")
 	sns.set(font='Helvetica',rc={'axes.facecolor':'.5','axes.grid': False})
@@ -728,12 +728,13 @@ def plot_structural_pc_distribution(network):
 def plot_pc_distribution(network):
 	network_objects = []
 	bw = 0.05
-	for community_alg in algorithms: network_objects.append(load_object('/%s/diverse_club/results/%s_0.8_%s_True_False.obj'%(homedir,network,community_alg)))
+	for community_alg in algorithms: network_objects.append(load_object('/%s/diverse_club/results/%s_0.8_%s.obj'%(homedir,network,community_alg)))
 	if network == 'f_c_elegans': iters = ['Worm1','Worm2','Worm3','Worm4']
 	if network == 'human': iters = tasks
 	algs = algorithms
 	sns.set_style('dark')
 	sns.set(font='Helvetica',rc={'axes.facecolor':'.5','axes.grid': False})
+	nconditions = 10
 	for name_idx in iters:
 		fig,subplots = sns.plt.subplots(5,2,figsize=(mm_2_inches(183),mm_2_inches(61.75*np.ceil(nconditions/2.))))
 		subplots = subplots.reshape(-1)
@@ -780,7 +781,7 @@ def plot_pc_distribution(network):
 			name = str(name) + ', ' + str(ls) + ', ' + str(ns)
 			patches.append(mpl.patches.Patch(color=color,label=name,alpha=.85))
 		patches.append(mpl.patches.Patch(color='black',label='mean'))		
-		savestr = '/%s/diverse_club/figures/individual/%s_dist_%s.pdf'%(homedir,measure,'%s_%s'%(network,name_idx))
+		savestr = '/%s/diverse_club/figures/individual/%s_dist_%s.pdf'%(homedir,'pc','%s_%s'%(network,name_idx))
 		ax = subplots[-1]
 		ax.legend(handles=patches,ncol=2,loc=10,title='graph density,\n$\it{n}$ communities walktrap (n),\n$\it{n}$ communities louvain (resolution)')
 		ax.get_xaxis().set_visible(False)
@@ -843,7 +844,7 @@ def clubness(variables):
 	degree_normalized_phis_std = degree_normalized_phis / np.std(degree_randomized_phis,axis=0).astype(float)
 	return np.array(pc_normalized_phis),np.array(degree_normalized_phis),np.array(pc_normalized_phis_std),np.array(degree_normalized_phis_std)
 
-def plot_clubness_by_club_value(network,algorithm):
+def plot_clubness_by_club_value(network):
 	colors = np.zeros((9,3))
 	colors[np.ix_([0,1])] = sns.cubehelix_palette(8)[-3],sns.cubehelix_palette(8)[3]
 	colors[np.ix_([2,3,4,5,6,7,8])] = np.array(sns.color_palette("cubehelix", 18))[-7:]
@@ -858,7 +859,6 @@ def plot_clubness_by_club_value(network,algorithm):
 		condition_name = 'worm'
 		percent_cutoff = .95
 
-	nconditions = len(np.unique(df[condition_name]))
 	if network == 'f_c_elegans' or network == 'structural_networks': 
 		fig,subplots = sns.plt.subplots(9,4,figsize=(mm_2_inches(183),mm_2_inches(247)))
 	if network == 'human': 
@@ -867,6 +867,7 @@ def plot_clubness_by_club_value(network,algorithm):
 	sidx = 0
 	for algorithm in algorithms:
 		df = load_object('/%s/diverse_club/results/%s_0.8_%s.obj'%(homedir,network,algorithm)).clubness
+		nconditions = len(np.unique(df[condition_name]))
 		df[condition_name] = df[condition_name].str.lower()
 		df['percentile'] = np.nan
 		for c in np.unique(df[condition_name]):
@@ -1053,11 +1054,11 @@ class Network:
 		for n_iter in range(n_iters):
 			for i,network,name in zip(range(len(self.networks)),self.networks,self.names):
 				if attack_name == None:
-					variables.append([i,network,n_attacks,self.ranks[i]])
+					variables.append([n_iter,network,n_attacks,self.ranks[i]])
 					attack_conditions.append(self.names[i].split("_")[0])
 					continue
 				elif name.split('_')[1] == attack_name:
-					variables.append([i,network,n_attacks,self.ranks[i]])
+					variables.append([n_iter,network,n_attacks,self.ranks[i]])
 					attack_conditions.append(self.names[i].split("_")[0])
 		pool = Pool(cores)
 		results = pool.map(attack,variables)
@@ -1703,7 +1704,6 @@ def make_networks(network,rankcut,community_alg):
 				subsetiters = np.array([5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20])
 			else:
 				subsets = ['network','cost']
-				subsetiters = [1]
 			raw_networks = [get_macaque_graph(),get_structural_c_elegans_graph(),get_power_graph(),get_airport_graph()]
 			raw_names = ['macaque','c elegans','US power grid','flight traffic']
 			names = []
@@ -1711,23 +1711,22 @@ def make_networks(network,rankcut,community_alg):
 			pool = Pool(cores)
 			variables = []
 			for nameidx,n in enumerate(raw_networks):
+				if community_alg != 'walktrap_n' and community_alg != 'louvain_res':
+					if n == 'macaque' or n == 'c elegans':
+						subsetiters = range(16)
+					else:
+						subsetiters = range(16)
 				for cost in subsetiters:
 					variables.append([n,community_alg,cost,False])
 					names.append(raw_names[nameidx] + '_' + str(cost))
 			networks = pool.map(partition_network,variables)
 			n = Network(networks,rankcut,names,subsets,community_alg)
-			save_object(n,'/%s/diverse_club/graphs/graph_objects/%s_%s_%s.obj'%(homedir,network,rankcut,community_alg))		
+			save_object(n,'/%s/diverse_club/graphs/graph_objects/%s_%s_%s.obj'%(homedir,network,rankcut,community_alg))			
 	return n
 
 def run_networks(network,run=False,nrandomiters=1000,rankcut=.8,community_alg='infomap',plot_it=False):
-	# network='f_c_elegans'
-	# run=True
-	# nrandomiters=50
-	# rankcut=.8
-	# community_alg='random'
-	# plot_it=False
-
-	if run == False: n = load_object('/%s/diverse_club/results/%s_%s_%s.obj'%(homedir,network,rankcut,community_alg))
+	if run == False: 
+		n = load_object('/%s/diverse_club/results/%s_%s_%s.obj'%(homedir,network,rankcut,community_alg))
 	else:
 		n = make_networks(network,rankcut,community_alg)
 		n.calculate_clubness(niters=nrandomiters,randomize_topology=True,permute_strength=False)
@@ -1742,10 +1741,11 @@ def run_networks(network,run=False,nrandomiters=1000,rankcut=.8,community_alg='i
 			else: n.attack('0.2',1000,10)
 		if network == 'structural_networks':
 			if community_alg == 'louvain_res' or community_alg == 'walktrap_n': n.attack(None,100,10)
-			else: n.attack(None,1000,10)
+			else: n.attack(None,100,10)
 		sys.stdout.flush()
 		save_object(n,'/%s/diverse_club/results/%s_%s_%s.obj'%(homedir,network,rankcut,community_alg))
-	if plot_it == True:
+	
+def plot(network,rankcut=.8,community_alg='infomap'):
 		if community_alg == 'louvain_res': filter_name = '0.5'
 		elif community_alg == 'walktrap_n': filter_name = '12'
 		else:
@@ -1763,8 +1763,8 @@ def run_networks(network,run=False,nrandomiters=1000,rankcut=.8,community_alg='i
 			(homedir,network,community_alg,randomize_topology,permute_strength))
 		plot_matrices(n,filter_name,'%s/diverse_club/figures/%s_matrices_%s_community_alg_%s_rt_%s_ps_%s.pdf'% \
 			(homedir,network,filter_name,community_alg,randomize_topology,permute_strength))
-		# if network == 'human':
-		# 	human_network_membership(n)
+		if network == 'human':
+			human_network_membership(n)
 
 def get_power_graph():
 	graph = Graph.Read_GML('/%s/diverse_club/graphs/power.gml'%(homedir))
@@ -1971,7 +1971,6 @@ def generative_model(n_nodes=100,iters=100,cores=40,all_shortest='all',q_ratio=.
 
 def submit_2_sge(network='human',cores=20):
 	for algorithm in algorithms:
-		if algorithm != 'infomap': continue
 		if algorithm == 'walktrap_n' or algorithm == 'louvain_res' or algorithm == 'random':
 			command = 'qsub -pe threaded %s -binding linear:%s -V -l mem_free=10G -j y -o /%s/diverse_club/sge/ -e /%s/diverse_club/sge/ -N %s diverse_club.py run %s %s ' \
 			%(cores,cores,homedir,homedir,network[0] + '_' + algorithm,network,algorithm)
@@ -1996,15 +1995,18 @@ if len(sys.argv) > 1:
 		run_networks(sys.argv[2],run=True,nrandomiters=1000,rankcut=.8,community_alg=sys.argv[3])
 
 
-# plot_community_stats(network,measure='sizes')
-# plot_community_stats(network,measure='q')
-# plot_similarity(network,measure='nmi')
-# plot_similarity(network,measure='pc')
-# plot_all_attacks(network)
-# plot_all_intersect(network)
-# plot_all_betweenness(network,'betweenness')
-# plot_all_betweenness(network,'edge betweenness')
-# plot_all_clubness(network,std=False,randomize_topology=True,permute_strength=False)
-# plot_all_clubness(network,std=False,randomize_topology=True,permute_strength=True)
-# plot_all_clubness(network,std=True,randomize_topology=True,permute_strength=False)
-# plot_all_clubness(network,std=True,randomize_topology=True,permute_strength=True)
+# for network in ['f_c_elegans']:
+# 	plot_community_stats(network,measure='sizes')
+# 	plot_community_stats(network,measure='q')
+# 	plot_similarity(network,measure='nmi')
+# 	plot_similarity(network,measure='pc')
+# 	plot_degree_distribution(network)
+# 	plot_pc_distribution(network)
+# 	plot_all_attacks(network)
+# 	plot_all_intersect(network)
+# 	plot_all_betweenness(network,'betweenness')
+# 	plot_all_betweenness(network,'edge betweenness')
+# 	plot_all_clubness(network,std=False,randomize_topology=True,permute_strength=False)
+# 	plot_all_clubness(network,std=False,randomize_topology=True,permute_strength=True)
+# 	plot_all_clubness(network,std=True,randomize_topology=True,permute_strength=False)
+# 	plot_all_clubness(network,std=True,randomize_topology=True,permute_strength=True)
