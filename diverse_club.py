@@ -59,44 +59,7 @@ algorithms = np.array(['infomap','walktrap','spectral','edge_betweenness','label
 order = np.array(['infomap','walktrap','spectral','edge_betweenness','label_propogation','louvain','spin_glass','rich club, thresholded','rich club, dense','walktrap_n','louvain_res'])
 
 
-def participation_coef(W, ci, degree='undirected'):
-    '''
-    Participation coefficient is a measure of diversity of intermodular
-    connections of individual nodes.
-    Parameters
-    ----------
-    W : NxN np.ndarray
-        binary/weighted directed/undirected connection matrix
-    ci : Nx1 np.ndarray
-        community affiliation vector
-    degree : str
-        Flag to describe nature of graph 'undirected': For undirected graphs
-                                         'in': Uses the in-degree
-                                         'out': Uses the out-degree
-    Returns
-    -------
-    P : Nx1 np.ndarray
-        participation coefficient
-    '''
-    if degree == 'in':
-        W = W.T
 
-    _, ci = np.unique(ci, return_inverse=True)
-    ci += 1
-
-    n = len(W)  # number of vertices
-    Ko = np.sum(W, axis=1)  # (out) degree
-    Gc = np.dot((W != 0), np.diag(ci))  # neighbor community affiliation
-    Kc2 = np.zeros((n,))  # community-specific neighbors
-
-    for i in range(1, int(np.max(ci)) + 1):
-        Kc2 += np.square(np.sum(W * (Gc == i), axis=1))
-
-    P = np.ones((n,)) - Kc2 / np.square(Ko)
-    # P=0 if for nodes with no (out) neighbors
-    P[np.where(np.logical_not(Ko))] = 0
-
-    return P
 
 def corrfunc(x, y, **kws):
 	r, _ = pearsonr(x, y)
@@ -165,6 +128,45 @@ def mm_2_inches(mm):
 	mm = mm * millimeter
 	mm.units = 'inches'
 	return mm.item()
+
+def participation_coef(W, ci, degree='undirected'):
+    '''
+    Participation coefficient is a measure of diversity of intermodular
+    connections of individual nodes.
+    Parameters
+    ----------
+    W : NxN np.ndarray
+        binary/weighted directed/undirected connection matrix
+    ci : Nx1 np.ndarray
+        community affiliation vector
+    degree : str
+        Flag to describe nature of graph 'undirected': For undirected graphs
+                                         'in': Uses the in-degree
+                                         'out': Uses the out-degree
+    Returns
+    -------
+    P : Nx1 np.ndarray
+        participation coefficient
+    '''
+    if degree == 'in':
+        W = W.T
+
+    _, ci = np.unique(ci, return_inverse=True)
+    ci += 1
+
+    n = len(W)  # number of vertices
+    Ko = np.sum(W, axis=1)  # (out) degree
+    Gc = np.dot((W != 0), np.diag(ci))  # neighbor community affiliation
+    Kc2 = np.zeros((n,))  # community-specific neighbors
+
+    for i in range(1, int(np.max(ci)) + 1):
+        Kc2 += np.square(np.sum(W * (Gc == i), axis=1))
+
+    P = np.ones((n,)) - Kc2 / np.square(Ko)
+    # P=0 if for nodes with no (out) neighbors
+    P[np.where(np.logical_not(Ko))] = 0
+
+    return P
 
 def load_object(path_to_object):
 	f = open('%s' %(path_to_object),'r')
@@ -1662,6 +1664,12 @@ def make_networks(network,rankcut,community_alg):
 			for task in tasks:
 				matrix = np.load('/%s/diverse_club/graphs/%s.npy'%(homedir,task))
 				for idx,cost in enumerate(subsetiters):
+					# graph = brain_graphs.matrix_to_igraph(matrix.copy(),cost=1,mst=True)
+					# nxg = igraph_2_networkx(graph)
+					# louvain_vc = louvain.best_partition(nxg,resolution=cost)
+					# print len(np.unique(louvain_vc.values()))
+					# vc = brain_graphs.brain_graph(VertexClustering(graph,louvain_vc.values()))
+					# print len(np.unique(vc.community.membership))
 					variables.append([matrix,community_alg,cost,True])
 					names.append('%s_%s'%(task.lower(),cost))
 			networks = pool.map(partition_network,variables)
@@ -1692,9 +1700,7 @@ def make_networks(network,rankcut,community_alg):
 			n = Network(networks,rankcut,names,subsets,community_alg)
 			save_object(n,'/%s/diverse_club/graphs/graph_objects/%s_%s_%s.obj'%(homedir,network,rankcut,community_alg))	
 	if network == 'structural_networks':
-		try:
-			1/0 
-			n = load_object('/%s/diverse_club/graphs/graph_objects/%s_%s_%s.obj'%(homedir,network,rankcut,community_alg))
+		try:n = load_object('/%s/diverse_club/graphs/graph_objects/%s_%s_%s.obj'%(homedir,network,rankcut,community_alg))
 		except:
 			if community_alg == 'louvain_res':
 				subsets = ['network','resolution']
@@ -1971,12 +1977,12 @@ def generative_model(n_nodes=100,iters=100,cores=40,all_shortest='all',q_ratio=.
 
 def submit_2_sge(network='human',cores=20):
 	for algorithm in algorithms:
-		if algorithm == 'walktrap_n' or algorithm == 'louvain_res' or algorithm == 'random':
+		if algorithm == 'walktrap_n' or algorithm == 'louvain_res' or network == 'structural_networks':
 			command = 'qsub -pe threaded %s -binding linear:%s -V -l mem_free=10G -j y -o /%s/diverse_club/sge/ -e /%s/diverse_club/sge/ -N %s diverse_club.py run %s %s ' \
 			%(cores,cores,homedir,homedir,network[0] + '_' + algorithm,network,algorithm)
 			os.system(command)
 		else:
-			command = 'qsub -pe threaded %s -binding linear:%s -V -l mem_free=5G -j y -o /%s/diverse_club/sge/ -e /%s/diverse_club/sge/ -N %s diverse_club.py run %s %s ' \
+			command = 'qsub -pe threaded %s -binding linear:%s -V -l mem_free=2G -j y -o /%s/diverse_club/sge/ -e /%s/diverse_club/sge/ -N %s diverse_club.py run %s %s ' \
 			%(cores,cores,homedir,homedir,network[0] + '_' + algorithm,network,algorithm)
 			os.system(command)
 
@@ -1995,7 +2001,7 @@ if len(sys.argv) > 1:
 		run_networks(sys.argv[2],run=True,nrandomiters=1000,rankcut=.8,community_alg=sys.argv[3])
 
 
-# for network in ['f_c_elegans']:
+# for network in ['human']:
 # 	plot_community_stats(network,measure='sizes')
 # 	plot_community_stats(network,measure='q')
 # 	plot_similarity(network,measure='nmi')
