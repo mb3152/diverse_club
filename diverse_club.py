@@ -337,6 +337,41 @@ def random_test(network,rankcut):
 			b[b ==0.0] = np.nan
 			rs.append(nan_pearsonr(a,b)[0])
 
+def plot_brainmap(measure='components'):
+	diverse_df = pd.read_csv('%s/diverse_club/results/diverse_brainmap.csv'%(homedir)).rename(columns={'Modules Engaged':'communities engaged','Club Activity':'club activity','Components Engaged':'components engaged'})
+	d_rs = []
+	for algorithm in algorithms:
+		tdf = diverse_df[diverse_df['Community Algorithm']==algorithm]
+		p = pearsonr(tdf['club activity'],tdf['%s engaged'%(measure)])[0]
+		d_rs.append(p)
+
+	colors = np.zeros((9,3))
+	colors[np.ix_([0,1])] = sns.cubehelix_palette(8)[-3],sns.cubehelix_palette(8)[3]
+	colors[np.ix_([2,3,4,5,6,7,8])] = np.array(sns.color_palette("cubehelix", 18))[-7:]
+	sns.lmplot(x="%s engaged"%(measure), y="club activity", hue="Community Algorithm", data=diverse_df, palette=colors,legend=False,size=8)
+	sns.plt.legend(loc=2)
+	sns.plt.title('mean r: ' +str(np.mean(d_rs))[:5])
+	sns.plt.savefig('/%s/diverse_club/figures/diverse_brainmap_%s.pdf'%(homedir,measure))
+	sns.plt.show()
+
+	rich_df = pd.read_csv('%s/diverse_club/results/rich_brainmap.csv'%(homedir)).rename(columns={'Modules Engaged':'communities engaged','Club Activity':'club activity','Components Engaged':'components engaged'})
+	rich_df = rich_df[(rich_df['Community Algorithm'] == 'infomap') | (rich_df['Community Algorithm'] == 'louvain_res')]
+	r_rs = []
+	for algorithm in ['infomap','louvain_res']:
+		tdf = rich_df[rich_df['Community Algorithm']==algorithm]
+		p = pearsonr(tdf['club activity'],tdf['%s engaged'%(measure)])[0]
+		r_rs.append(p)
+	rich_df['Community Algorithm'][rich_df['Community Algorithm']=='infomap'] = 'sparse'
+	rich_df['Community Algorithm'][rich_df['Community Algorithm']=='louvain_res'] = 'dense'
+	colors = np.zeros((2,3))
+	colors[0] = sns.light_palette("green")[5][:3]
+	colors[1] = sns.light_palette("green")[2][:3]
+	sns.lmplot(x="%s engaged"%(measure), y="club activity", hue="Community Algorithm", data=rich_df, palette=colors,legend=False,size=8)
+	sns.plt.legend(loc=2)
+	sns.plt.title('mean r: ' +str(np.mean(r_rs))[:5])
+	sns.plt.savefig('/%s/diverse_club/figures/rich_brainmap_%s.pdf'%(homedir,measure))
+	sns.plt.show()
+
 def plot_community_stats(network,network_objects,measure='sizes'):
 	# network_objects = []
 	# for community_alg in algorithms:
@@ -1498,7 +1533,9 @@ def human_network_membership(n):
 			rich_networks = network_names[rich_rank]==network_name
 			network_df = network_df.append({'task':n.names[idx].split('_')[0],'club':'diverse','network':network_name.lower(),'number of club nodes':len(diverse_networks[diverse_networks==True])},ignore_index=True)
 			network_df = network_df.append({'task':n.names[idx].split('_')[0],'club':'rich', 'network':network_name.lower(),'number of club nodes':len(rich_networks[rich_networks==True])},ignore_index=True)
-	sns.barplot(data=network_df,x='network',y='number of club nodes',hue='club',hue_order=['diverse','rich'],palette={'diverse':sns.color_palette()[0],'rich':sns.color_palette()[1]})
+	sns.barplot(data=network_df,x='network',y='number of club nodes',hue='club',hue_order=['diverse','rich'],palette={'rich':"#70C858",'diverse':"#00008C"})
+	
+
 	sns.plt.xticks(rotation=90)
 	sns.plt.ylabel('mean number of club nodes in network')
 	sns.plt.title('rich and diverse club network membership across tasks and costs')
@@ -1671,6 +1708,38 @@ def plot(network,rankcut=.8,community_alg='infomap'):
 		(homedir,network,filter_name,community_alg,randomize_topology,permute_strength))
 	if network == 'human':
 		human_network_membership(n)
+		average_pc = []
+		average_deg = []
+		for nidx,nn in enumerate(n.networks):
+			# if n.names[nidx].split('_')[0] != 'rest': continue
+			average_pc.append(nn.pc)
+			average_deg.append(nn.community.graph.strength(weights='weight'))
+		pc = np.nanmean(average_pc,axis=0)
+		deg = np.nanmean(average_deg,axis=0)
+		pc_rc = np.where(pc>=np.percentile(pc,80))[0]
+		deg_rc = np.where(deg>=np.percentile(deg,80))[0]
+		deg_rc_array = np.zeros(len(pc))
+		pc_rc_array = np.zeros(len(pc))
+		deg_rc_array[deg_rc] = 6
+		pc_rc_array[pc_rc] = 3
+		combined_array = deg_rc_array + pc_rc_array
+		
+		import matlab
+		from matlab import engine
+		eng = engine.start_matlab()
+		eng.addpath('/home/despoB/mb3152/BrainNet/')
+		
+		def make_surf_image(values,configs,outfile,drop_zero=False):
+			write_df = pd.read_csv('/home/despoB/mb3152/BrainNet/Data/ExampleFiles/Power264/Node_Power264.node',header=None,sep='\t')
+			write_df[3] = values
+			if drop_zero:
+				write_df = write_df[write_df[3]>0]
+			write_df.to_csv('/home/despoB/mb3152/dynamic_mod/brain_figures/rich_club/temp.node',sep='\t',index=False,names=False,header=False)
+			node_file = '/home/despoB/mb3152/dynamic_mod/brain_figures/rich_club/temp.node'
+			surf_file = '/home/despoB/mb3152/BrainNet/Data/SurfTemplate/BrainMesh_ICBM152_smoothed.nv'
+			eng.BrainNet_MapCfg(node_file,surf_file,outfile,configs)
+		
+		make_surf_image(combined_array,configs='/home/despoB/mb3152/BrainNet/pc_values.mat',outfile='/%s/diverse_club/figures/combined_clubs_brain.png' %(homedir),drop_zero=True)
 
 def get_power_graph():
 	graph = Graph.Read_GML('/%s/diverse_club/graphs/power.gml'%(homedir))
@@ -1896,16 +1965,17 @@ def check_all_networks(alg='infomap'):
 			print n.names[idx]
 			check_network(nn)
 
+
 if len(sys.argv) > 1:
 	cores = 38
 	if sys.argv[1] == 'run':
 		run_networks(sys.argv[2],run=True,nrandomiters=1000,rankcut=.8,community_alg=sys.argv[3])
 
-# for network in ['f_c_elegans','human','structural_networks'][2:]:
-# 	network_objects = []
-# 	for community_alg in algorithms:
-# 		print community_alg
-# 		network_objects.append(load_object('/%s/diverse_club/results/%s_0.8_%s.obj'%(homedir,network,community_alg)))
+for network in ['f_c_elegans','human','structural_networks'][2:]:
+	network_objects = []
+	for community_alg in algorithms:
+		print community_alg
+		network_objects.append(load_object('/%s/diverse_club/results/%s_0.8_%s.obj'%(homedir,network,community_alg)))
 	# plot_all_clubness(network,network_objects=network_objects,std=False,randomize_topology=True,permute_strength=False)
 	# plot_all_clubness(network,network_objects=network_objects,std=False,randomize_topology=True,permute_strength=True)
 	# plot_all_clubness(network,network_objects=network_objects,std=True,randomize_topology=True,permute_strength=False)
@@ -1918,6 +1988,6 @@ if len(sys.argv) > 1:
 	# plot_community_stats(network,network_objects=network_objects,measure='q')
 	# plot_similarity(network,network_objects=network_objects,measure='nmi')
 	# plot_similarity(network,network_objects=network_objects,measure='pc')
-	# plot_degree_distribution(network)
-	# plot_pc_distribution(network,network_objects=network_objects)
+	plot_degree_distribution(network)
+	plot_pc_distribution(network,network_objects=network_objects)
 
