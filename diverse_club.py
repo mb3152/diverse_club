@@ -294,7 +294,7 @@ def check_network(network):
 	assert np.min(network.community.graph.degree()) > 0
 	assert np.isnan(network.community.graph.degree()).any() == False
 	assert np.nanmax(np.array(network.pc)) < 1.
-	assert np.isclose(network.pc,participation_coef(network.matrix,network.community.membership)).all() == True
+	assert np.isclose(network.pc,participation_coef(np.array(network.matrix),np.array(network.community.membership))).all() == True
 
 def random_test(network,rankcut):
 	nr = load_object('/%s/diverse_club/results/%s_%s_%s.obj'%(homedir,network,rankcut,'random'))
@@ -1528,20 +1528,22 @@ def human_network_membership(n):
 	for idx,network in enumerate(n.networks):
 		rich_rank = np.argsort(network.community.graph.strength(weights='weight'))[n.ranks[idx]:]
 		diverse_rank = np.argsort(network.pc)[n.ranks[idx]:]
-		for network_name in network_names:
+		for network_name in np.unique(network_names):
 			diverse_networks = network_names[diverse_rank]==network_name
 			rich_networks = network_names[rich_rank]==network_name
 			network_df = network_df.append({'task':n.names[idx].split('_')[0],'club':'diverse','network':network_name.lower(),'number of club nodes':len(diverse_networks[diverse_networks==True])},ignore_index=True)
 			network_df = network_df.append({'task':n.names[idx].split('_')[0],'club':'rich', 'network':network_name.lower(),'number of club nodes':len(rich_networks[rich_networks==True])},ignore_index=True)
-	sns.barplot(data=network_df,x='network',y='number of club nodes',hue='club',hue_order=['diverse','rich'],palette={'rich':"#70C858",'diverse':"#00008C"})
 	
-
+	for network_name in np.unique(network_names):
+		network_df['number of club nodes'][network_df['network']==network_name.lower()] = network_df['number of club nodes'][network_df['network']==network_name.lower()] / float(len(network_names[network_names==network_name]))
+	network_df['number of club nodes'] = network_df['number of club nodes'] * 100
+	sns.barplot(data=network_df,x='network',y='number of club nodes',hue='club',hue_order=['diverse','rich'],palette={'rich':"#70C858",'diverse':"#00008C"})
 	sns.plt.xticks(rotation=90)
-	sns.plt.ylabel('mean number of club nodes in network')
+	sns.plt.ylabel('percentage of community membership by each club')
 	sns.plt.title('rich and diverse club network membership across tasks and costs')
 	sns.plt.tight_layout()
 	sns.plt.savefig('/%s/diverse_club/figures/human_both_club_membership_%s.pdf'%(homedir,n.community_alg),dpi=3600)
-	sns.plt.close()
+	sns.plt.show()
 
 def partition_network(variables):
 	matrix = variables[0]
@@ -1960,7 +1962,7 @@ def check_all_networks(alg='infomap'):
 	networks = ['f_c_elegans','human','structural_networks']
 	for network in networks:
 		print network
-		n = load_object('/%s/diverse_club/results/%s_%s_%s.obj'%(homedir,network,.8,alg))
+		n = load_object('/%s/diverse_club/graphs/graph_objects/%s_%s_%s.obj'%(homedir,network,.8,alg))
 		for idx,nn in enumerate(n.networks):
 			print n.names[idx]
 			check_network(nn)
@@ -1971,11 +1973,11 @@ if len(sys.argv) > 1:
 	if sys.argv[1] == 'run':
 		run_networks(sys.argv[2],run=True,nrandomiters=1000,rankcut=.8,community_alg=sys.argv[3])
 
-for network in ['f_c_elegans','human','structural_networks'][2:]:
-	network_objects = []
-	for community_alg in algorithms:
-		print community_alg
-		network_objects.append(load_object('/%s/diverse_club/results/%s_0.8_%s.obj'%(homedir,network,community_alg)))
+# for network in ['f_c_elegans','human','structural_networks']:
+# 	network_objects = []
+# 	for community_alg in algorithms:
+# 		print community_alg
+# 		network_objects.append(load_object('/%s/diverse_club/results/%s_0.8_%s.obj'%(homedir,network,community_alg)))
 	# plot_all_clubness(network,network_objects=network_objects,std=False,randomize_topology=True,permute_strength=False)
 	# plot_all_clubness(network,network_objects=network_objects,std=False,randomize_topology=True,permute_strength=True)
 	# plot_all_clubness(network,network_objects=network_objects,std=True,randomize_topology=True,permute_strength=False)
@@ -1988,6 +1990,6 @@ for network in ['f_c_elegans','human','structural_networks'][2:]:
 	# plot_community_stats(network,network_objects=network_objects,measure='q')
 	# plot_similarity(network,network_objects=network_objects,measure='nmi')
 	# plot_similarity(network,network_objects=network_objects,measure='pc')
-	plot_degree_distribution(network)
-	plot_pc_distribution(network,network_objects=network_objects)
+	# plot_degree_distribution(network)
+	# plot_pc_distribution(network,network_objects=network_objects)
 
