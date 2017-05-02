@@ -291,6 +291,9 @@ def check_network(network):
 	assert np.isnan(network.pc).any() == False
 	assert len(loops[loops==True]) == 0.0
 	assert len(multiples[multiples==True]) == 0.0
+	assert network.community.graph.has_multiple() == False
+	assert network.community.graph.is_directed() == False
+	assert network.community.graph.is_weighted()
 	assert np.min(network.community.graph.degree()) > 0
 	assert np.isnan(network.community.graph.degree()).any() == False
 	assert np.nanmax(np.array(network.pc)) < 1.
@@ -1958,13 +1961,14 @@ def submit_2_sge(network='human',cores=20):
 			%(cores,cores,homedir,homedir,network[0] + '_' + algorithm,network,algorithm)
 			os.system(command)
 
-def check_all_networks(alg='infomap'):
-	networks = ['f_c_elegans','human','structural_networks']
+def check_all_networks(networks = ['f_c_elegans','human','structural_networks'],alg='infomap'):
+	
 	for network in networks:
 		print network
 		n = load_object('/%s/diverse_club/graphs/graph_objects/%s_%s_%s.obj'%(homedir,network,.8,alg))
 		for idx,nn in enumerate(n.networks):
 			print n.names[idx]
+			# 1/0
 			check_network(nn)
 
 
