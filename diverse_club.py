@@ -298,6 +298,8 @@ def check_network(network):
 	assert np.isnan(network.community.graph.degree()).any() == False
 	assert np.nanmax(np.array(network.pc)) < 1.
 	assert np.isclose(network.pc,participation_coef(np.array(network.matrix),np.array(network.community.membership))).all() == True
+	assert np.isclose(network.pc,participation_coef(np.array(network.matrix),np.array(network.community.membership).reshape(-1,1))).all() == True
+	assert np.sum(abs(network.pc-participation_coef(np.array(network.matrix),np.array(network.community.membership)))) < 1e-10
 
 def random_test(network,rankcut):
 	nr = load_object('/%s/diverse_club/results/%s_%s_%s.obj'%(homedir,network,rankcut,'random'))
@@ -1968,7 +1970,6 @@ def check_all_networks(networks = ['f_c_elegans','human','structural_networks'],
 		n = load_object('/%s/diverse_club/graphs/graph_objects/%s_%s_%s.obj'%(homedir,network,.8,alg))
 		for idx,nn in enumerate(n.networks):
 			print n.names[idx]
-			# 1/0
 			check_network(nn)
 
 
