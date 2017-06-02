@@ -537,10 +537,6 @@ def plot_similarity(network,network_objects=None,measure='nmi'):
 		savestr = savestr.replace('pdf','npy')
 		np.save(savestr,np.nanmean(matrices,axis=0))
 	if network == 'structural_networks':
-		network_objects = []
-		for community_alg in algorithms:
-			# if measure = 'nmi'
-			network_objects.append(load_object('/%s/diverse_club/graphs/graph_objects/%s_0.8_%s.obj'%(homedir,network,community_alg)))
 		matrices = []
 		for structural_network in ['macaque','c_elegans','US power grid','flight traffic']:
 			if structural_network == 'c_elegans':
@@ -549,7 +545,8 @@ def plot_similarity(network,network_objects=None,measure='nmi'):
 			alglabels = []
 			plot_network_objects = []
 
-			for i in range(len(network_objects)):
+			for i in range(len(algorithms)):
+				print algorithms[i]
 				if algorithms[i] == 'louvain_res':
 					subsetiters = np.linspace(.4,.8,16)
 				elif algorithms[i] == 'walktrap_n':
@@ -557,9 +554,10 @@ def plot_similarity(network,network_objects=None,measure='nmi'):
 				else:
 					subsetiters = range(16)
 				label_idx = 0
-				for j in range(len(network_objects[i].names)):
-					if structural_network in network_objects[i].names[j]:
-						plot_network_objects.append(network_objects[i].networks[j])
+				network_object = load_object('/%s/diverse_club/graphs/graph_objects/%s_0.8_%s.obj'%(homedir,network,algorithms[i]))
+				for j in range(len(network_object.names)):
+					if structural_network in network_object.names[j]:
+						plot_network_objects.append(network_object.networks[j])
 						labels.append(algorithms[i] + ',' + str(np.around(subsetiters[label_idx],4)))
 						alglabels.append(algorithms[i])
 						label_idx += 1
@@ -666,9 +664,9 @@ def plot_degree_distribution(network):
 
 def plot_pc_distribution(network,network_objects=None):
 	bw = 0.05
-	if network_objects == None:
-		network_objects = []
-		for community_alg in algorithms: network_objects.append(load_object('/%s/diverse_club/graphs/graph_objects/%s_0.8_%s.obj'%(homedir,network,community_alg)))
+	# if network_objects == None:
+	# 	network_objects = []
+	# 	for community_alg in algorithms: network_objects.append(load_object('/%s/diverse_club/graphs/graph_objects/%s_0.8_%s.obj'%(homedir,network,community_alg)))
 	if network == 'f_c_elegans': iters = ['Worm1','Worm2','Worm3','Worm4']
 	if network == 'human': iters = tasks
 	if network == 'structural_networks': iters = ['macaque', 'c elegans', 'US power grid', 'flight traffic']
@@ -680,7 +678,9 @@ def plot_pc_distribution(network,network_objects=None):
 		fig,subplots = sns.plt.subplots(5,2,figsize=(mm_2_inches(183),mm_2_inches(61.75*np.ceil(nconditions/2.))))
 		subplots = subplots.reshape(-1)
 		plt.text(1.05, 1.13, name_idx.lower() + ' participation coefficient distributions', transform = subplots[0].transAxes, horizontalalignment='center', fontsize=12,)
-		for idx,n in enumerate(network_objects):
+		for idx,n in enumerate(algorithms):
+			print n
+			n = load_object('/%s/diverse_club/graphs/graph_objects/%s_0.8_%s.obj'%(homedir,network,n))
 			pcs = []
 			for nidx,nn in enumerate(n.networks):
 				if n.names[nidx].split('_')[0] != '%s'%(name_idx) and  n.names[nidx].split('_')[0] != '%s'%(name_idx.lower()):
@@ -1231,17 +1231,19 @@ def plot_all_clubness(network,algorithms=algorithms,network_objects=None,std=Fal
 		final_max = 0
 		final_min = 0
 		for i in range(len(ax2.lines)):
-			temp_max = np.nanmax(ax2.lines[i].get_data()[1][ax2.lines[i].get_data()[0]<percent_cutoff])
+			temp_max = np.nanmax(ax2.lines[i].get_data()[1][ax2.lines[i].get_data()[0]<percent_cutoff-15])
 			if temp_max > final_max:
 				final_max = temp_max
 		for i in range(len(ax2.lines)):
-			temp_min = np.nanmin(ax2.lines[i].get_data()[1][ax2.lines[i].get_data()[0]<percent_cutoff])
+			temp_min = np.nanmin(ax2.lines[i].get_data()[1][ax2.lines[i].get_data()[0]<percent_cutoff-15])
 			if temp_min < final_min:
 				final_min = temp_min
 		ax2.set_ylim(final_min,final_max)
 		ax2.xaxis.set_major_locator(mpl.ticker.MultipleLocator(15))
 		ax2.set_xlim(0,percent_cutoff)
-		if value == 'clubness_std': ax2.set_xlim(50,percent_cutoff)
+		if value == 'clubness_std':
+			# ax2.set_ylim(final_min,final_max)
+			ax2.set_xlim(50,percent_cutoff)
 		ax2.legend_.remove()
 	if len(subplots) - nconditions == 2:
 		for ax in subplots[-2:]:
@@ -2076,7 +2078,7 @@ network = 'structural_networks'
 # 1/0
 # plot_all_clubness(network,network_objects=None,std=False,randomize_topology=True,permute_strength=False)
 # plot_all_clubness(network,network_objects=None,std=False,randomize_topology=True,permute_strength=True)
-# plot_all_clubness(network,network_objects=None,std=True,randomize_topology=True,permute_strength=False)
+plot_all_clubness(network,network_objects=None,std=True,randomize_topology=True,permute_strength=False)
 # plot_clubness_by_club_value(network,network_objects=None)
 # plot_all_attacks(network,network_objects=None)
 # plot_all_intersect(network,network_objects=None)
@@ -2085,8 +2087,8 @@ network = 'structural_networks'
 # 1/0
 # plot_community_stats(network,network_objects=None,measure='sizes')
 # plot_community_stats(network,network_objects=None,measure='q')
-plot_similarity(network,network_objects=None,measure='nmi')
-plot_similarity(network,network_objects=None,measure='pc')
+# plot_similarity(network,network_objects=None,measure='nmi')
+# plot_similarity(network,network_objects=None,measure='pc')
 # plot_degree_distribution(network)
-plot_pc_distribution(network,network_objects=None)
+# plot_pc_distribution(network,network_objects=None)
 
